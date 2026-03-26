@@ -59,11 +59,9 @@ const UserSchema = new Schema<IUser>(
   { timestamps: true }
 );
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(UserSchema as any).pre("save", async function (this: IUser, next: () => void) {
-  if (!this.isModified("mpin")) return next();
+UserSchema.pre("save", async function () {
+  if (!this.isModified("mpin")) return;
   this.mpin = await bcrypt.hash(this.mpin, 12);
-  next();
 });
 
 UserSchema.methods.compareMpin = async function (candidate: string): Promise<boolean> {
