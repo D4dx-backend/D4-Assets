@@ -172,14 +172,14 @@ export default function ReportsPage() {
               <button
                 onClick={() => exportToCSV(getExportRows(), `${reportType}-report`)}
                 title="CSV"
-                className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg border border-gray-200"
+                className="p-2 text-gray-500 dark:text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg border border-gray-200 dark:border-slate-600"
               >
                 <Download className="w-4 h-4" />
               </button>
               <button
                 onClick={() => exportToExcel(getExportRows(), `${reportType}-report`)}
                 title="Excel"
-                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg border border-gray-200 text-xs font-bold"
+                className="p-2 text-gray-500 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold"
               >
                 XLS
               </button>

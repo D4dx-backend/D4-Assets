@@ -134,9 +134,9 @@ export default function MovementsPage() {
         action={
           <div className="flex items-center gap-2">
             <div className="flex gap-1">
-              <button onClick={() => exportToCSV(movements.map(m => ({ Asset: m.asset?.name ?? "", Event: m.event?.name ?? "", Person: m.allocatedPerson?.name ?? "", Status: m.status, "Out Date": m.outDate?.slice(0,10) ?? "", "In Date": m.inDate?.slice(0,10) ?? "", Condition: m.condition ?? "" })), "movements")} title="CSV" className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg border border-gray-200"><Download className="w-4 h-4" /></button>
-              <button onClick={() => exportToExcel(movements.map(m => ({ Asset: m.asset?.name ?? "", Event: m.event?.name ?? "", Person: m.allocatedPerson?.name ?? "", Status: m.status, "Out Date": m.outDate?.slice(0,10) ?? "", "In Date": m.inDate?.slice(0,10) ?? "", Condition: m.condition ?? "" })), "movements")} title="Excel" className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg border border-gray-200 text-xs font-bold">XLS</button>
-              <button onClick={() => exportToPDF(movements.map(m => ({ Asset: m.asset?.name ?? "", Event: m.event?.name ?? "", Person: m.allocatedPerson?.name ?? "", Status: m.status, "Out Date": m.outDate?.slice(0,10) ?? "", Condition: m.condition ?? "" })), "Movement Register", "movements")} title="PDF" className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg border border-gray-200 text-xs font-bold">PDF</button>
+              <button onClick={() => exportToCSV(movements.map(m => ({ Asset: m.asset?.name ?? "", Event: m.event?.name ?? "", Person: m.allocatedPerson?.name ?? "", Status: m.status, "Out Date": m.outDate?.slice(0,10) ?? "", "In Date": m.inDate?.slice(0,10) ?? "", Condition: m.condition ?? "" })), "movements")} title="CSV" className="p-2 text-gray-500 dark:text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg border border-gray-200 dark:border-slate-600"><Download className="w-4 h-4" /></button>
+              <button onClick={() => exportToExcel(movements.map(m => ({ Asset: m.asset?.name ?? "", Event: m.event?.name ?? "", Person: m.allocatedPerson?.name ?? "", Status: m.status, "Out Date": m.outDate?.slice(0,10) ?? "", "In Date": m.inDate?.slice(0,10) ?? "", Condition: m.condition ?? "" })), "movements")} title="Excel" className="p-2 text-gray-500 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold">XLS</button>
+              <button onClick={() => exportToPDF(movements.map(m => ({ Asset: m.asset?.name ?? "", Event: m.event?.name ?? "", Person: m.allocatedPerson?.name ?? "", Status: m.status, "Out Date": m.outDate?.slice(0,10) ?? "", Condition: m.condition ?? "" })), "Movement Register", "movements")} title="PDF" className="p-2 text-gray-500 dark:text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold">PDF</button>
             </div>
             <button
               onClick={() => { outForm.reset({ outDate: new Date().toISOString().slice(0, 10) }); setShowOutModal(true); }}
@@ -275,7 +275,7 @@ export default function MovementsPage() {
               <textarea {...inForm.register("remarks")} className="input resize-none" rows={2} placeholder="Optional notes…" />
             </Field>
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => { setShowInModal(false); setSelectedMovement(null); }} className="flex-1 py-2.5 border border-gray-200 text-sm font-medium rounded-xl">Cancel</button>
+              <button type="button" onClick={() => { setShowInModal(false); setSelectedMovement(null); }} className="flex-1 py-2.5 border border-gray-200 dark:border-slate-600 dark:text-slate-300 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700">Cancel</button>
               <button type="submit" disabled={inForm.formState.isSubmitting} className="flex-1 py-2.5 bg-green-600 text-white text-sm font-medium rounded-xl disabled:opacity-60 flex items-center justify-center gap-2">
                 <ArrowDownLeft className="w-4 h-4" />
                 {inForm.formState.isSubmitting ? "Saving…" : "Confirm Return"}
