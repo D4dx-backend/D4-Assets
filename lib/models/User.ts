@@ -61,6 +61,7 @@ const UserSchema = new Schema<IUser>(
 
 UserSchema.pre("save", async function () {
   if (!this.isModified("mpin")) return;
+  if (/^\$2[ab]\$/.test(this.mpin)) return; // already hashed (e.g. set explicitly by admin)
   this.mpin = await bcrypt.hash(this.mpin, 12);
 });
 

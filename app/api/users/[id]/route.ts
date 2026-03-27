@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { connectDB } from "@/lib/mongodb";
 import User, { type UserRole } from "@/lib/models/User";
 import { logActivity } from "@/lib/activityLogger";
+import bcrypt from "bcryptjs";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -35,7 +36,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     if (!/^\d{4,6}$/.test(body.mpin)) {
       return NextResponse.json({ error: "MPIN must be 4–6 digits" }, { status: 400 });
     }
-    user.mpin = body.mpin;
+    user.mpin = await bcrypt.hash(body.mpin, 12);
   }
   if (body.permissions) user.permissions = body.permissions as unknown as typeof user.permissions;
 

@@ -175,7 +175,7 @@ export default function EventDetailPage() {
     return (
       <div className="space-y-3">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-16 bg-white rounded-xl animate-pulse border border-gray-100" />
+          <div key={i} className="h-16 bg-white dark:bg-slate-800 rounded-xl animate-pulse border border-gray-100 dark:border-slate-700" />
         ))}
       </div>
     );
@@ -183,7 +183,7 @@ export default function EventDetailPage() {
 
   if (!event) {
     return (
-      <div className="py-12 text-center text-gray-500">
+      <div className="py-12 text-center text-gray-500 dark:text-slate-400">
         Event not found.{" "}
         <Link href="/events" className="text-blue-600 underline">
           Back to Events
@@ -200,31 +200,31 @@ export default function EventDetailPage() {
     <div>
       {/* Back + title */}
       <div className="flex items-center gap-3 mb-5">
-        <Link href="/events" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-          <ArrowLeft className="w-5 h-5 text-gray-600" />
+        <Link href="/events" className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+          <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-slate-400" />
         </Link>
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-bold text-gray-900 truncate">{event.name}</h1>
-          <p className="text-xs text-gray-500 truncate">📍 {event.location}</p>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-white truncate">{event.name}</h1>
+          <p className="text-xs text-gray-500 dark:text-slate-400 truncate">📍 {event.location}</p>
         </div>
         <Badge variant={statusVariants[event.status] ?? "gray"}>{event.status}</Badge>
       </div>
 
       {/* Event info card */}
-      <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 mb-5">
+      <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 mb-5">
         <div className="grid grid-cols-2 gap-y-3 text-sm">
           <div>
-            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">From</p>
-            <p className="text-gray-900 font-medium">{format(new Date(event.fromDate), "dd MMM yyyy")}</p>
+            <p className="text-xs text-gray-400 dark:text-slate-500 font-medium uppercase tracking-wide">From</p>
+            <p className="text-gray-900 dark:text-white font-medium">{format(new Date(event.fromDate), "dd MMM yyyy")}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">To</p>
-            <p className="text-gray-900 font-medium">{format(new Date(event.toDate), "dd MMM yyyy")}</p>
+            <p className="text-xs text-gray-400 dark:text-slate-500 font-medium uppercase tracking-wide">To</p>
+            <p className="text-gray-900 dark:text-white font-medium">{format(new Date(event.toDate), "dd MMM yyyy")}</p>
           </div>
           {event.responsiblePerson && (
             <div className="col-span-2">
-              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Responsible</p>
-              <p className="text-gray-900 font-medium">{event.responsiblePerson.name}</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500 font-medium uppercase tracking-wide">Responsible</p>
+              <p className="text-gray-900 dark:text-white font-medium">{event.responsiblePerson.name}</p>
             </div>
           )}
         </div>
@@ -233,7 +233,7 @@ export default function EventDetailPage() {
       {/* ── Issued assets ─────────────────────────────────── */}
       {issuedAssets.length > 0 && (
         <div className="mb-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-2">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
             Currently Issued ({issuedAssets.length})
           </h2>
           <div className="space-y-2">
@@ -242,12 +242,12 @@ export default function EventDetailPage() {
               return (
                 <div
                   key={asset._id}
-                  className="bg-orange-50 border border-orange-200 rounded-xl p-3 flex items-center gap-3"
+                  className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800/40 rounded-xl p-3 flex items-center gap-3"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm text-gray-900">{asset.name}</span>
-                      <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                      <span className="font-medium text-sm text-gray-900 dark:text-white">{asset.name}</span>
+                      <span className="text-xs text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
                         {asset.category}
                       </span>
                     </div>
@@ -272,12 +272,12 @@ export default function EventDetailPage() {
       {/* ── Available assets ───────────────────────────────── */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-gray-700">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-slate-300">
             Available Assets ({availableAssets.length})
           </h2>
           <div className="flex items-center gap-2">
             {availableAssets.length > 0 && (
-              <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+              <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={allAvailableSelected}
@@ -303,7 +303,7 @@ export default function EventDetailPage() {
         </div>
 
         {availableAssets.length === 0 ? (
-          <div className="text-center py-10 text-gray-400 text-sm">
+          <div className="text-center py-10 text-gray-400 dark:text-slate-500 text-sm">
             <Package className="w-8 h-8 mx-auto mb-2 opacity-40" />
             All assets are currently issued
           </div>
@@ -315,10 +315,10 @@ export default function EventDetailPage() {
                 <div
                   key={asset._id}
                   onClick={() => toggleSelect(asset._id)}
-                  className={`bg-white border rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all select-none ${
+                  className={`bg-white dark:bg-slate-800 border rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all select-none ${
                     isSelected
-                      ? "border-blue-300 bg-blue-50"
-                      : "border-gray-100 hover:border-gray-200"
+                      ? "border-blue-300 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-500"
+                      : "border-gray-100 dark:border-slate-700 hover:border-gray-200 dark:hover:border-slate-600"
                   }`}
                 >
                   <input
@@ -329,12 +329,12 @@ export default function EventDetailPage() {
                     className="w-4 h-4 rounded text-blue-600 flex-shrink-0"
                   />
                   <div className="flex-1 min-w-0">
-                    <span className="font-medium text-sm text-gray-900">{asset.name}</span>
-                    <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded ml-2">
+                    <span className="font-medium text-sm text-gray-900 dark:text-white">{asset.name}</span>
+                    <span className="text-xs text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded ml-2">
                       {asset.category}
                     </span>
                   </div>
-                  <span className="text-xs text-gray-400 flex-shrink-0">Available</span>
+                  <span className="text-xs text-gray-400 dark:text-slate-500 flex-shrink-0">Available</span>
                 </div>
               );
             })}
@@ -346,12 +346,12 @@ export default function EventDetailPage() {
       {returnMovement && (
         <Modal title="Return Asset" onClose={() => setReturnMovement(null)}>
           <div className="space-y-4">
-            <p className="text-sm text-gray-700">
+            <p className="text-sm text-gray-700 dark:text-slate-300">
               Returning <strong>{returnMovement.asset.name}</strong>
             </p>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Condition</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Condition</label>
               <select
                 value={returnCondition}
                 onChange={(e) =>
@@ -376,7 +376,7 @@ export default function EventDetailPage() {
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Notes</label>
               <textarea
                 value={returnNotes}
                 onChange={(e) => setReturnNotes(e.target.value)}
@@ -390,7 +390,7 @@ export default function EventDetailPage() {
               <button
                 type="button"
                 onClick={() => setReturnMovement(null)}
-                className="flex-1 py-2.5 border border-gray-200 text-sm font-medium rounded-xl hover:bg-gray-50"
+                className="flex-1 py-2.5 border border-gray-200 dark:border-slate-600 dark:text-slate-300 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700"
               >
                 Cancel
               </button>

@@ -72,16 +72,21 @@ export default function AssetsPage() {
     return () => clearTimeout(timer);
   }, [fetchAssets]);
 
-  useEffect(() => {
-    fetch("/api/categories")
-      .then(r => r.json() as Promise<{ success: boolean; data: Category[] }>)
-      .then(d => { if (d.success) setCategories(d.data); });
+  const fetchCategories = useCallback(async () => {
+    const res = await fetch("/api/categories");
+    const d = await res.json() as { success: boolean; data: Category[] };
+    if (d.success) setCategories(d.data);
   }, []);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
 
   function openCreate() {
     setEditingAsset(null);
     reset({});
     setBillFile(null);
+    fetchCategories();
     setShowModal(true);
   }
 
@@ -151,9 +156,9 @@ export default function AssetsPage() {
         action={
           <div className="flex items-center gap-2">
             <div className="flex gap-1">
-              <button onClick={() => exportToCSV(assets.map(a => ({ Name: a.name, Category: a.category, Purchased: a.dateOfPurchase?.slice(0,10) ?? "", Warranty: a.warrantyDetails ?? "", "Warranty Expiry": a.warrantyExpiryDate?.slice(0,10) ?? "" })), "assets")} title="CSV" className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg border border-gray-200"><Download className="w-4 h-4" /></button>
-              <button onClick={() => exportToExcel(assets.map(a => ({ Name: a.name, Category: a.category, Purchased: a.dateOfPurchase?.slice(0,10) ?? "", Warranty: a.warrantyDetails ?? "", "Warranty Expiry": a.warrantyExpiryDate?.slice(0,10) ?? "" })), "assets")} title="Excel" className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg border border-gray-200 text-xs font-bold">XLS</button>
-              <button onClick={() => exportToPDF(assets.map(a => ({ Name: a.name, Category: a.category, Purchased: a.dateOfPurchase?.slice(0,10) ?? "", Warranty: a.warrantyDetails ?? "" })), "Asset Register", "assets")} title="PDF" className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg border border-gray-200 text-xs font-bold">PDF</button>
+              <button onClick={() => exportToCSV(assets.map(a => ({ Name: a.name, Category: a.category, Purchased: a.dateOfPurchase?.slice(0,10) ?? "", Warranty: a.warrantyDetails ?? "", "Warranty Expiry": a.warrantyExpiryDate?.slice(0,10) ?? "" })), "assets")} title="CSV" className="p-2 text-gray-500 dark:text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg border border-gray-200 dark:border-slate-600"><Download className="w-4 h-4" /></button>
+              <button onClick={() => exportToExcel(assets.map(a => ({ Name: a.name, Category: a.category, Purchased: a.dateOfPurchase?.slice(0,10) ?? "", Warranty: a.warrantyDetails ?? "", "Warranty Expiry": a.warrantyExpiryDate?.slice(0,10) ?? "" })), "assets")} title="Excel" className="p-2 text-gray-500 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold">XLS</button>
+              <button onClick={() => exportToPDF(assets.map(a => ({ Name: a.name, Category: a.category, Purchased: a.dateOfPurchase?.slice(0,10) ?? "", Warranty: a.warrantyDetails ?? "" })), "Asset Register", "assets")} title="PDF" className="p-2 text-gray-500 dark:text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold">PDF</button>
             </div>
             <button
               onClick={openCreate}
@@ -173,7 +178,7 @@ export default function AssetsPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search assets…"
-          className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full pl-9 pr-4 py-2.5 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
@@ -181,7 +186,7 @@ export default function AssetsPage() {
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-white rounded-xl h-20 animate-pulse border border-gray-100" />
+            <div key={i} className="bg-white dark:bg-slate-800 rounded-xl h-20 animate-pulse border border-gray-100 dark:border-slate-700" />
           ))}
         </div>
       ) : assets.length === 0 ? (
@@ -203,20 +208,20 @@ export default function AssetsPage() {
             return (
               <div
                 key={asset._id}
-                className="bg-white rounded-xl p-4 shadow-sm border border-gray-100"
+                className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-slate-700"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-medium text-gray-900 text-sm">{asset.name}</h3>
+                      <h3 className="font-medium text-gray-900 dark:text-white text-sm">{asset.name}</h3>
                       <Badge variant="blue">{asset.category}</Badge>
                       {warrantyExpired && <Badge variant="red">Warranty Expired</Badge>}
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
                       Purchased: {format(new Date(asset.dateOfPurchase), "dd MMM yyyy")}
                     </p>
                     {asset.warrantyDetails && (
-                      <p className="text-xs text-gray-500 mt-0.5">{asset.warrantyDetails}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{asset.warrantyDetails}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
@@ -297,7 +302,7 @@ export default function AssetsPage() {
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="flex-1 py-2.5 border border-gray-200 text-sm font-medium rounded-xl hover:bg-gray-50"
+                className="flex-1 py-2.5 border border-gray-200 dark:border-slate-600 dark:text-slate-300 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700"
               >
                 Cancel
               </button>
@@ -327,7 +332,7 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">{label}</label>
       {children}
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>

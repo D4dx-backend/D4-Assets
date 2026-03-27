@@ -4,6 +4,7 @@ import Asset from "@/lib/models/Asset";
 import Event from "@/lib/models/Event";
 import Movement from "@/lib/models/Movement";
 import DamageReport from "@/lib/models/DamageReport";
+import "@/lib/models/Person";
 import { Package, CalendarDays, ArrowLeftRight, AlertTriangle } from "lucide-react";
 
 async function getStats() {
@@ -42,8 +43,8 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-sm text-gray-500">Welcome back, {session?.user?.name}</p>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+        <p className="text-sm text-gray-500 dark:text-slate-400">Welcome back, {session?.user?.name}</p>
       </div>
 
       {/* Stats grid */}
@@ -51,25 +52,25 @@ export default async function DashboardPage() {
         {cards.map((card) => {
           const Icon = card.icon;
           return (
-            <div key={card.label} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+            <div key={card.label} className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
               <div className={`w-10 h-10 ${card.color} rounded-lg flex items-center justify-center mb-3`}>
                 <Icon className="w-5 h-5 text-white" />
               </div>
-              <p className="text-2xl font-bold text-gray-900">{card.value}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{card.label}</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{card.value}</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{card.label}</p>
             </div>
           );
         })}
       </div>
 
       {/* Recent Movements */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-        <div className="px-4 py-3 border-b border-gray-100">
-          <h2 className="font-semibold text-sm text-gray-900">Recent Movements</h2>
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+        <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700">
+          <h2 className="font-semibold text-sm text-gray-900 dark:text-white">Recent Movements</h2>
         </div>
-        <div className="divide-y divide-gray-50">
+        <div className="divide-y divide-gray-50 dark:divide-slate-700">
           {recentMovements.length === 0 && (
-            <p className="text-sm text-gray-500 text-center py-8">No movements yet</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400 text-center py-8">No movements yet</p>
           )}
           {recentMovements.map((m) => {
             const asset = m.asset as unknown as { name: string };
@@ -78,16 +79,16 @@ export default async function DashboardPage() {
             return (
               <div key={m._id?.toString()} className="px-4 py-3 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{asset?.name}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{asset?.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">
                     {event?.name} · {person?.name}
                   </p>
                 </div>
                 <span
                   className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                     m.status === "OUT"
-                      ? "bg-orange-100 text-orange-700"
-                      : "bg-green-100 text-green-700"
+                      ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"
+                      : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
                   }`}
                 >
                   {m.status}

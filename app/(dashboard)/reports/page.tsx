@@ -172,14 +172,14 @@ export default function ReportsPage() {
               <button
                 onClick={() => exportToCSV(getExportRows(), `${reportType}-report`)}
                 title="CSV"
-                className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg border border-gray-200"
+                className="p-2 text-gray-500 dark:text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg border border-gray-200 dark:border-slate-600"
               >
                 <Download className="w-4 h-4" />
               </button>
               <button
                 onClick={() => exportToExcel(getExportRows(), `${reportType}-report`)}
                 title="Excel"
-                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg border border-gray-200 text-xs font-bold"
+                className="p-2 text-gray-500 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold"
               >
                 XLS
               </button>
@@ -202,7 +202,7 @@ export default function ReportsPage() {
               key={tab.key}
               onClick={() => setReportType(tab.key)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                reportType === tab.key ? "bg-blue-700 text-white" : "bg-gray-100 text-gray-600"
+                reportType === tab.key ? "bg-blue-700 text-white" : "bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300"
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -215,17 +215,17 @@ export default function ReportsPage() {
       {/* Date filter */}
       <div className="flex gap-3 mb-4">
         <div className="flex-1">
-          <label className="block text-xs text-gray-500 mb-1">From</label>
+          <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">From</label>
           <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="input" />
         </div>
         <div className="flex-1">
-          <label className="block text-xs text-gray-500 mb-1">To</label>
+          <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">To</label>
           <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="input" />
         </div>
       </div>
 
       {loading ? (
-        <div className="space-y-3">{[1,2,3,4].map(i => <div key={i} className="bg-white rounded-xl h-16 animate-pulse border border-gray-100" />)}</div>
+        <div className="space-y-3">{[1,2,3,4].map(i => <div key={i} className="bg-white dark:bg-slate-800 rounded-xl h-16 animate-pulse border border-gray-100 dark:border-slate-700" />)}</div>
       ) : data.length === 0 ? (
         <EmptyState icon={BarChart3} title="No data" description="No records found for the selected period" />
       ) : reportType === "movement" ? (
@@ -243,14 +243,14 @@ function MovementTable({ data }: { data: Movement[] }) {
   return (
     <div className="space-y-3">
       {data.map((m) => (
-        <div key={m._id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+        <div key={m._id} className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
           <div className="flex items-center justify-between mb-1">
-            <span className="font-medium text-sm text-gray-900">{m.asset?.name}</span>
+            <span className="font-medium text-sm text-gray-900 dark:text-white">{m.asset?.name}</span>
             <Badge variant={m.status === "OUT" ? "orange" : "green"}>{m.status}</Badge>
           </div>
-          <p className="text-xs text-gray-500">{m.event?.name} · {m.event?.location}</p>
-          <p className="text-xs text-gray-500">Person: {m.allocatedPerson?.name}</p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-500 dark:text-slate-400">{m.event?.name} · {m.event?.location}</p>
+          <p className="text-xs text-gray-500 dark:text-slate-400">Person: {m.allocatedPerson?.name}</p>
+          <p className="text-xs text-gray-500 dark:text-slate-400">
             Out: {format(new Date(m.outDate), "dd MMM yyyy")}
             {m.inDate && ` · In: ${format(new Date(m.inDate), "dd MMM yyyy")}`}
           </p>
@@ -265,14 +265,14 @@ function DamageTable({ data }: { data: DamageReport[] }) {
   return (
     <div className="space-y-3">
       {data.map((d) => (
-        <div key={d._id} className="bg-white rounded-xl p-4 shadow-sm border border-red-100">
+        <div key={d._id} className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-red-100 dark:border-red-900/40">
           <div className="flex items-center justify-between mb-1">
-            <span className="font-medium text-sm text-gray-900">{d.asset?.name}</span>
+            <span className="font-medium text-sm text-gray-900 dark:text-white">{d.asset?.name}</span>
             <Badge variant={d.isResolved ? "green" : "red"}>{d.isResolved ? "Resolved" : "Open"}</Badge>
           </div>
-          <p className="text-xs text-gray-500">{d.event?.name}</p>
-          <p className="text-xs font-medium text-red-700 mt-1 capitalize">{d.type}: {d.reason}</p>
-          <p className="text-xs text-gray-400 mt-1">Reported by {d.reportedBy?.name} · {format(new Date(d.createdAt), "dd MMM yyyy")}</p>
+          <p className="text-xs text-gray-500 dark:text-slate-400">{d.event?.name}</p>
+          <p className="text-xs font-medium text-red-700 dark:text-red-400 mt-1 capitalize">{d.type}: {d.reason}</p>
+          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Reported by {d.reportedBy?.name} · {format(new Date(d.createdAt), "dd MMM yyyy")}</p>
         </div>
       ))}
     </div>
@@ -283,15 +283,15 @@ function ActivityTable({ data }: { data: ActivityLog[] }) {
   return (
     <div className="space-y-2">
       {data.map((log) => (
-        <div key={log._id} className="bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100 flex items-center justify-between gap-3">
+        <div key={log._id} className="bg-white dark:bg-slate-800 rounded-xl px-4 py-3 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium bg-gray-100 px-2 py-0.5 rounded">{log.action}</span>
-              <span className="text-xs text-gray-500">{log.module}</span>
+              <span className="text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 px-2 py-0.5 rounded">{log.action}</span>
+              <span className="text-xs text-gray-500 dark:text-slate-400">{log.module}</span>
             </div>
-            <p className="text-xs text-gray-700 mt-0.5">{log.userName} — {log.details}</p>
+            <p className="text-xs text-gray-700 dark:text-slate-300 mt-0.5">{log.userName} — {log.details}</p>
           </div>
-          <p className="text-xs text-gray-400 flex-shrink-0">{format(new Date(log.createdAt), "dd MMM HH:mm")}</p>
+          <p className="text-xs text-gray-400 dark:text-slate-500 flex-shrink-0">{format(new Date(log.createdAt), "dd MMM HH:mm")}</p>
         </div>
       ))}
     </div>

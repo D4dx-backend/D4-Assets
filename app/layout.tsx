@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import { SessionProvider } from "@/components/SessionProvider";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -16,7 +17,9 @@ export const metadata: Metadata = {
     title: "Asset Mgmt",
   },
   icons: {
+    icon: "/icons/icon-192x192.png",
     apple: "/icons/icon-192x192.png",
+    shortcut: "/icons/icon-192x192.png",
   },
 };
 
@@ -33,8 +36,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
-      <body className="h-full bg-gray-50 text-gray-900">
+    <html lang="en" className={`${inter.variable} h-full antialiased`} suppressHydrationWarning>
+      <body className="h-full bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
+        <ThemeProvider>
         <SessionProvider>
           {children}
           <Toaster
@@ -42,6 +46,7 @@ export default function RootLayout({
             toastOptions={{ duration: 3000 }}
           />
         </SessionProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

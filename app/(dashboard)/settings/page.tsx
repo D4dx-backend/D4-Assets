@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -25,16 +25,27 @@ function MpinInput({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => { ref.current?.focus(); }, []);
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (/^[0-9]$/.test(e.key)) {
+      if (value.length < 6) onChange(value + e.key);
+    } else if (e.key === "Backspace" || e.key === "Delete") {
+      onChange(value.slice(0, -1));
+    }
+  }
+
   return (
-    <div className="space-y-2">
-      <p className="text-sm font-medium text-gray-700">{label}</p>
+    <div ref={ref} tabIndex={0} onKeyDown={handleKeyDown} className="space-y-2 outline-none">
+      <p className="text-sm font-medium text-gray-700 dark:text-slate-300">{label}</p>
       {/* dots */}
       <div className="flex justify-center gap-3 py-2">
         {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
             className={`w-3.5 h-3.5 rounded-full border-2 transition-all ${
-              i < value.length ? "bg-blue-700 border-blue-700 scale-110" : "border-gray-300"
+              i < value.length ? "bg-blue-700 border-blue-700 scale-110" : "border-gray-300 dark:border-slate-600"
             }`}
           />
         ))}
@@ -53,8 +64,8 @@ function MpinInput({
               }}
               className={`h-12 rounded-xl text-base font-semibold transition-all active:scale-95 ${
                 d === "X"
-                  ? "bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center"
-                  : "bg-gray-50 text-gray-900 hover:bg-blue-50 hover:text-blue-700 border border-gray-200"
+                  ? "bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 flex items-center justify-center"
+                  : "bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white hover:bg-blue-50 dark:hover:bg-slate-600 hover:text-blue-700 border border-gray-200 dark:border-slate-600"
               }`}
             >
               {d === "X" ? <Delete className="w-4 h-4 mx-auto" /> : d}
@@ -76,7 +87,7 @@ export default function SettingsPage() {
   });
 
   async function saveName(data: NameForm) {
-    const res = await fetch(`/api/users/${session?.user?.id}`, {
+    const res = await fetch(`/api/users/me`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: data.name }),
@@ -143,26 +154,26 @@ export default function SettingsPage() {
       <PageHeader title="Settings" description="Manage your account" />
 
       {/* Profile card */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-5">
         {/* Avatar */}
-        <div className="flex items-center gap-3 mb-5 pb-4 border-b border-gray-100">
-          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <span className="text-blue-700 font-bold text-lg">
+        <div className="flex items-center gap-3 mb-5 pb-4 border-b border-gray-100 dark:border-slate-700">
+          <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 rounded-full flex items-center justify-center flex-shrink-0">
+            <span className="text-blue-700 dark:text-blue-300 font-bold text-lg">
               {session?.user?.name?.[0]?.toUpperCase()}
             </span>
           </div>
           <div className="min-w-0">
-            <p className="font-semibold text-gray-900 truncate">{session?.user?.name}</p>
-            <p className="text-sm text-gray-500 truncate">{session?.user?.email}</p>
-            <p className="text-xs text-blue-600 font-medium mt-0.5 capitalize">{session?.user?.role}</p>
+            <p className="font-semibold text-gray-900 dark:text-white truncate">{session?.user?.name}</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400 truncate">{session?.user?.email}</p>
+            <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mt-0.5 capitalize">{session?.user?.role}</p>
           </div>
         </div>
 
         {/* Name */}
         <form onSubmit={handleSubmit(saveName)} className="space-y-3">
           <div className="flex items-center gap-2 mb-1">
-            <User className="w-4 h-4 text-gray-500" />
-            <span className="text-sm font-medium text-gray-700">Display Name</span>
+            <User className="w-4 h-4 text-gray-500 dark:text-slate-400" />
+            <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Display Name</span>
           </div>
           <div className="flex gap-2">
             <input {...register("name")} className="input flex-1" />
@@ -179,10 +190,10 @@ export default function SettingsPage() {
       </div>
 
       {/* MPIN change card */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-5">
         <div className="flex items-center gap-2 mb-4">
           <KeyRound className="w-4 h-4 text-blue-600" />
-          <span className="text-sm font-semibold text-gray-700">Change MPIN</span>
+          <span className="text-sm font-semibold text-gray-700 dark:text-slate-300">Change MPIN</span>
         </div>
 
         {/* Step indicator */}
@@ -191,14 +202,16 @@ export default function SettingsPage() {
             <div key={s} className="flex items-center gap-2">
               <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
                 mpinStep === s ? "bg-blue-700 text-white" :
-                (["current","new","confirm"].indexOf(mpinStep) > i ? "bg-green-500 text-white" : "bg-gray-100 text-gray-400")
+                (["current","new","confirm"].indexOf(mpinStep) > i ? "bg-green-500 text-white" : "bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-slate-500")
               }`}>
                 {["current","new","confirm"].indexOf(mpinStep) > i ? "✓" : i + 1}
               </div>
-              <span className={`text-xs ${mpinStep === s ? "text-blue-700 font-medium" : "text-gray-400"}`}>
+              <span className={`text-xs ${
+                mpinStep === s ? "text-blue-700 dark:text-blue-400 font-medium" : "text-gray-400 dark:text-slate-500"
+              }`}>
                 {s === "current" ? "Current" : s === "new" ? "New" : "Confirm"}
               </span>
-              {i < 2 && <div className="w-4 h-px bg-gray-200" />}
+              {i < 2 && <div className="w-4 h-px bg-gray-200 dark:bg-slate-600" />}
             </div>
           ))}
         </div>
@@ -220,7 +233,7 @@ export default function SettingsPage() {
         <button
           type="button"
           onClick={resetMpinFlow}
-          className="mt-3 text-xs text-gray-400 hover:text-gray-600 w-full text-center"
+          className="mt-3 text-xs text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 w-full text-center"
         >
           Reset
         </button>
