@@ -1,7 +1,9 @@
 /**
  * Run with: npx tsx scripts/seed.ts
  * Creates the initial admin user if one doesn't exist yet.
- * Login: admin@example.com  MPIN: 123456
+ * Reads credentials from .env.local:
+ *   ADMIN_EMAIL (default: admin@example.com)
+ *   ADMIN_MPIN  (default: 123456)
  */
 import mongoose from "mongoose";
 import * as dotenv from "dotenv";
@@ -31,27 +33,30 @@ async function seed() {
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error("MONGODB_URI not set in .env.local");
 
+  const adminEmail = process.env.ADMIN_EMAIL ?? "admin@example.com";
+  const adminMpin  = process.env.ADMIN_MPIN  ?? "123456";
+
   await mongoose.connect(uri);
   console.log("Connected to MongoDB");
 
   const User = mongoose.models.User ?? mongoose.model("User", UserSchema);
 
-  const hashedMpin = await bcrypt.hash("123456", 12);
+  const hashedMpin = await bcrypt.hash(adminMpin, 12);
 
-  const existing = await User.findOne({ email: "admin@example.com" });
+  const existing = await User.findOne({ email: adminEmail });
   if (existing) {
     await User.updateOne(
-      { email: "admin@example.com" },
+      { email: adminEmail },
       { $set: { mpin: hashedMpin, role: "admin", isActive: true } }
     );
-    console.log("✅ Admin user MPIN reset: admin@example.com  MPIN: 123456");
+    console.log(`✅ Admin user MPIN reset: ${adminEmail}  MPIN: ${adminMpin}`);
     await mongoose.disconnect();
     return;
   }
 
   await User.create({
     name: "System Admin",
-    email: "admin@example.com",
+    email: adminEmail,
     mpin: hashedMpin,
     role: "admin",
     permissions: {
@@ -60,7 +65,7 @@ async function seed() {
     },
   });
 
-  console.log("✅ Admin user created: admin@example.com  MPIN: 123456");
+  console.log(`✅ Admin user created: ${adminEmail}  MPIN: ${adminMpin}`);
   await mongoose.disconnect();
 }
 

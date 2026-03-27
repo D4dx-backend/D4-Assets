@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -25,8 +25,19 @@ function MpinInput({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => { ref.current?.focus(); }, []);
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (/^[0-9]$/.test(e.key)) {
+      if (value.length < 6) onChange(value + e.key);
+    } else if (e.key === "Backspace" || e.key === "Delete") {
+      onChange(value.slice(0, -1));
+    }
+  }
+
   return (
-    <div className="space-y-2">
+    <div ref={ref} tabIndex={0} onKeyDown={handleKeyDown} className="space-y-2 outline-none">
       <p className="text-sm font-medium text-gray-700">{label}</p>
       {/* dots */}
       <div className="flex justify-center gap-3 py-2">
@@ -76,7 +87,7 @@ export default function SettingsPage() {
   });
 
   async function saveName(data: NameForm) {
-    const res = await fetch(`/api/users/${session?.user?.id}`, {
+    const res = await fetch(`/api/users/me`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: data.name }),

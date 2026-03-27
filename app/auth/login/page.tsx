@@ -1,10 +1,11 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { Package, Delete, UserPlus, LogIn } from "lucide-react";
+import Image from "next/image";
+import { Delete, UserPlus, LogIn, Lock } from "lucide-react";
 
 const DIGITS = ["1","2","3","4","5","6","7","8","9","","0","X"];
 
@@ -18,16 +19,28 @@ function MpinPad({
   onChange: (v: string) => void;
   disabled?: boolean;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => { ref.current?.focus(); }, []);
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (disabled) return;
+    if (/^[0-9]$/.test(e.key)) {
+      if (value.length < 6) onChange(value + e.key);
+    } else if (e.key === "Backspace" || e.key === "Delete") {
+      onChange(value.slice(0, -1));
+    }
+  }
+
   return (
-    <div className="space-y-3">
+    <div ref={ref} tabIndex={0} onKeyDown={handleKeyDown} className="space-y-4 outline-none">
       <div className="flex justify-center gap-3">
         {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
-            className={`w-4 h-4 rounded-full border-2 transition-all ${
+            className={`w-4 h-4 rounded-full border-2 transition-all duration-200 ${
               i < value.length
-                ? "bg-blue-700 border-blue-700 scale-110"
-                : "border-gray-300"
+                ? "bg-gradient-to-br from-violet-400 to-indigo-500 border-violet-400 scale-125 shadow-[0_0_8px_rgba(139,92,246,0.7)]"
+                : "border-white/30 bg-white/5"
             }`}
           />
         ))}
@@ -44,10 +57,10 @@ function MpinPad({
                 if (d === "X") { onChange(value.slice(0, -1)); return; }
                 if (value.length < 6) onChange(value + d);
               }}
-              className={`h-13 py-3 rounded-xl text-lg font-semibold transition-all active:scale-95 disabled:opacity-50 ${
+              className={`py-3.5 rounded-xl text-lg font-semibold transition-all duration-150 active:scale-90 disabled:opacity-40 ${
                 d === "X"
-                  ? "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  : "bg-gray-50 text-gray-900 hover:bg-blue-50 hover:text-blue-700 border border-gray-200"
+                  ? "bg-white/10 text-white/60 hover:bg-white/20 border border-white/10"
+                  : "bg-white/10 text-white hover:bg-white/20 border border-white/10 hover:border-violet-400/50 hover:shadow-[0_0_10px_rgba(139,92,246,0.3)]"
               }`}
             >
               {d === "X" ? <Delete className="w-5 h-5 mx-auto" /> : d}
@@ -91,44 +104,44 @@ function SignInForm({ onSwitch }: { onSwitch: () => void }) {
       {step === "email" ? (
         <>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+            <label className="block text-sm font-medium text-white/70 mb-1.5">Email Address</label>
             <input
               type="email"
               autoComplete="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && email.includes("@")) setStep("mpin"); }}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-violet-400 transition-all"
               placeholder="you@example.com"
             />
           </div>
           <button
             onClick={() => setStep("mpin")}
             disabled={!email.includes("@")}
-            className="w-full py-2.5 bg-blue-700 text-white font-semibold rounded-xl text-sm hover:bg-blue-800 disabled:opacity-50 transition-colors"
+            className="w-full py-3 bg-gradient-to-r from-violet-500 to-indigo-600 text-white font-semibold rounded-xl text-sm hover:from-violet-600 hover:to-indigo-700 disabled:opacity-40 transition-all shadow-lg shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-[1.02] active:scale-[0.98]"
           >
             Continue
           </button>
         </>
       ) : (
         <>
-          <div className="text-center">
-            <p className="text-sm text-gray-500">Signing in as</p>
-            <p className="font-medium text-gray-900 text-sm truncate">{email}</p>
-            <button onClick={() => { setStep("email"); setMpin(""); }} className="text-xs text-blue-600 hover:underline mt-0.5">
+          <div className="text-center bg-white/5 rounded-xl p-3 border border-white/10">
+            <p className="text-xs text-white/50 uppercase tracking-wider mb-0.5">Signing in as</p>
+            <p className="font-medium text-white text-sm truncate">{email}</p>
+            <button onClick={() => { setStep("email"); setMpin(""); }} className="text-xs text-violet-400 hover:text-violet-300 hover:underline mt-0.5 transition-colors">
               Change
             </button>
           </div>
-          <p className="text-center text-sm text-gray-500">Enter your 6-digit MPIN</p>
+          <p className="text-center text-sm text-white/60">Enter your 6-digit MPIN</p>
           <MpinPad value={mpin} onChange={handleDigit} disabled={loading} />
-          {loading && <p className="text-center text-sm text-blue-600 animate-pulse">Verifying…</p>}
+          {loading && <p className="text-center text-sm text-violet-400 animate-pulse">Verifying…</p>}
         </>
       )}
 
-      <div className="pt-2 border-t border-gray-100 text-center">
-        <p className="text-sm text-gray-500">
+      <div className="pt-3 border-t border-white/10 text-center">
+        <p className="text-sm text-white/50">
           New here?{" "}
-          <button onClick={onSwitch} className="text-blue-600 font-medium hover:underline">
+          <button onClick={onSwitch} className="text-violet-400 font-medium hover:text-violet-300 hover:underline transition-colors">
             Create an account
           </button>
         </p>
@@ -193,13 +206,16 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
       <div className="flex items-center justify-center gap-3">
         {(["info","mpin","confirm"] as const).map((s, i) => (
           <div key={s} className="flex items-center gap-2">
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-              step === s ? "bg-blue-700 text-white" :
-              (["info","mpin","confirm"].indexOf(step) > i ? "bg-green-500 text-white" : "bg-gray-100 text-gray-400")
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
+              step === s
+                ? "bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-[0_0_12px_rgba(139,92,246,0.6)]"
+                : ["info","mpin","confirm"].indexOf(step) > i
+                  ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white"
+                  : "bg-white/10 text-white/30 border border-white/20"
             }`}>
               {["info","mpin","confirm"].indexOf(step) > i ? "✓" : i + 1}
             </div>
-            {i < 2 && <div className="w-6 h-px bg-gray-200" />}
+            {i < 2 && <div className="w-8 h-px bg-white/20" />}
           </div>
         ))}
       </div>
@@ -208,24 +224,24 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
         <>
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+              <label className="block text-sm font-medium text-white/70 mb-1.5">Full Name</label>
               <input
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-violet-400 transition-all"
                 placeholder="John Doe"
                 autoComplete="name"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+              <label className="block text-sm font-medium text-white/70 mb-1.5">Email Address</label>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && canContinue) setStep("mpin"); }}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-violet-500/60 focus:border-violet-400 transition-all"
                 placeholder="you@example.com"
                 autoComplete="email"
               />
@@ -234,7 +250,7 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
           <button
             onClick={() => setStep("mpin")}
             disabled={!canContinue}
-            className="w-full py-2.5 bg-blue-700 text-white font-semibold rounded-xl text-sm hover:bg-blue-800 disabled:opacity-50 transition-colors"
+            className="w-full py-3 bg-gradient-to-r from-violet-500 to-indigo-600 text-white font-semibold rounded-xl text-sm hover:from-violet-600 hover:to-indigo-700 disabled:opacity-40 transition-all shadow-lg shadow-violet-500/30 hover:shadow-violet-500/50 hover:scale-[1.02] active:scale-[0.98]"
           >
             Continue
           </button>
@@ -243,8 +259,8 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
 
       {step === "mpin" && (
         <>
-          <p className="text-center text-sm text-gray-600">
-            Create a <strong>6-digit MPIN</strong> for <span className="text-blue-700">{email}</span>
+          <p className="text-center text-sm text-white/60">
+            Create a <strong className="text-white">6-digit MPIN</strong> for <span className="text-violet-400">{email}</span>
           </p>
           <MpinPad value={mpin} onChange={handleNewMpin} />
         </>
@@ -252,16 +268,16 @@ function SignUpForm({ onSwitch }: { onSwitch: () => void }) {
 
       {step === "confirm" && (
         <>
-          <p className="text-center text-sm text-gray-600">Confirm your MPIN</p>
+          <p className="text-center text-sm text-white/60">Confirm your MPIN</p>
           <MpinPad value={confirmMpin} onChange={handleConfirmMpin} disabled={loading} />
-          {loading && <p className="text-center text-sm text-blue-600 animate-pulse">Creating account…</p>}
+          {loading && <p className="text-center text-sm text-violet-400 animate-pulse">Creating account…</p>}
         </>
       )}
 
-      <div className="pt-2 border-t border-gray-100 text-center">
-        <p className="text-sm text-gray-500">
+      <div className="pt-3 border-t border-white/10 text-center">
+        <p className="text-sm text-white/50">
           Already have an account?{" "}
-          <button onClick={onSwitch} className="text-blue-600 font-medium hover:underline">
+          <button onClick={onSwitch} className="text-violet-400 font-medium hover:text-violet-300 hover:underline transition-colors">
             Sign in
           </button>
         </p>
@@ -275,40 +291,68 @@ export default function AuthPage() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4 py-8">
-      <div className="w-full max-w-sm">
-        {/* Logo */}
+    <div className="min-h-screen flex items-center justify-center px-4 py-8 relative overflow-hidden bg-[#0d0d1a]">
+      {/* Animated gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#1a0533] via-[#0d0d2b] to-[#020817]" />
+      {/* Glowing orbs */}
+      <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-violet-700/20 blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full bg-indigo-600/20 blur-[120px] pointer-events-none" />
+      <div className="absolute top-[40%] left-[60%] w-[300px] h-[300px] rounded-full bg-purple-500/10 blur-[80px] pointer-events-none" />
+
+      <div className="w-full max-w-sm relative z-10">
+        {/* Logo + title */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 bg-blue-700 rounded-2xl flex items-center justify-center shadow-lg mb-3">
-            <Package className="w-8 h-8 text-white" />
+          <div className="relative mb-4">
+            {/* Glow ring around logo */}
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 blur-md opacity-70 scale-110" />
+            <Image
+              src="/icons/logo.jpeg"
+              alt="D4DX logo"
+              width={72}
+              height={72}
+              className="relative rounded-2xl shadow-2xl"
+              priority
+            />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Asset Manager</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-3xl font-bold text-white tracking-tight">Asset Manager</h1>
+          <p className="text-sm text-white/50 mt-1">
             {mode === "signin" ? "Sign in to your account" : "Create a new account"}
           </p>
         </div>
 
         {/* Mode toggle tabs */}
-        <div className="flex bg-gray-100 rounded-xl p-1 mb-4">
+        <div className="flex bg-white/5 border border-white/10 rounded-2xl p-1 mb-5 backdrop-blur-sm">
           <button
             onClick={() => setMode("signin")}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all ${
-              mode === "signin" ? "bg-white text-blue-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+              mode === "signin"
+                ? "bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/30"
+                : "text-white/50 hover:text-white/80"
             }`}
           >
             <LogIn className="w-4 h-4" /> Sign In
           </button>
           <button
             onClick={() => setMode("signup")}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all ${
-              mode === "signup" ? "bg-white text-blue-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+              mode === "signup"
+                ? "bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/30"
+                : "text-white/50 hover:text-white/80"
             }`}
           >
             <UserPlus className="w-4 h-4" /> Sign Up
           </button>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl p-6">
+        {/* Glass card */}
+        <div className="bg-white/8 backdrop-blur-xl border border-white/15 rounded-3xl shadow-2xl p-6"
+          style={{ background: "rgba(255,255,255,0.06)" }}>
+          {/* Lock icon header */}
+          <div className="flex items-center justify-center mb-5">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500/30 to-indigo-600/30 border border-violet-400/30 flex items-center justify-center">
+              <Lock className="w-5 h-5 text-violet-300" />
+            </div>
+          </div>
           {mode === "signin"
             ? <SignInForm onSwitch={() => setMode("signup")} />
             : <SignUpForm onSwitch={() => setMode("signin")} />}

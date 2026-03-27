@@ -4,6 +4,7 @@ import Asset from "@/lib/models/Asset";
 import Event from "@/lib/models/Event";
 import Movement from "@/lib/models/Movement";
 import DamageReport from "@/lib/models/DamageReport";
+import "@/lib/models/Person";
 import { Package, CalendarDays, ArrowLeftRight, AlertTriangle } from "lucide-react";
 
 async function getStats() {

@@ -72,16 +72,21 @@ export default function AssetsPage() {
     return () => clearTimeout(timer);
   }, [fetchAssets]);
 
-  useEffect(() => {
-    fetch("/api/categories")
-      .then(r => r.json() as Promise<{ success: boolean; data: Category[] }>)
-      .then(d => { if (d.success) setCategories(d.data); });
+  const fetchCategories = useCallback(async () => {
+    const res = await fetch("/api/categories");
+    const d = await res.json() as { success: boolean; data: Category[] };
+    if (d.success) setCategories(d.data);
   }, []);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
 
   function openCreate() {
     setEditingAsset(null);
     reset({});
     setBillFile(null);
+    fetchCategories();
     setShowModal(true);
   }
 
