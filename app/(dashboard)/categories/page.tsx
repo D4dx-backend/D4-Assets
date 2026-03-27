@@ -80,16 +80,16 @@ export default function CategoriesPage() {
       />
 
       {loading ? (
-        <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="bg-white rounded-xl h-14 animate-pulse border border-gray-100" />)}</div>
+        <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="bg-white dark:bg-slate-800 rounded-xl h-14 animate-pulse border border-gray-100 dark:border-slate-700" />)}</div>
       ) : categories.length === 0 ? (
         <EmptyState icon={Tag} title="No categories yet" description="Add asset categories here" />
       ) : (
         <div className="space-y-2">
           {categories.map((c) => (
-            <div key={c._id} className="bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100 flex items-center justify-between">
+            <div key={c._id} className="bg-white dark:bg-slate-800 rounded-xl px-4 py-3 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-900">{c.name}</p>
-                {c.description && <p className="text-xs text-gray-500">{c.description}</p>}
+                <p className="text-sm font-medium text-gray-900 dark:text-white">{c.name}</p>
+                {c.description && <p className="text-xs text-gray-500 dark:text-slate-400">{c.description}</p>}
               </div>
               <div className="flex gap-1">
                 <button onClick={() => openEdit(c)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
@@ -104,16 +104,16 @@ export default function CategoriesPage() {
         <Modal title={editing ? "Edit Category" : "Add Category"} onClose={() => setShowModal(false)}>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Category Name</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Category Name</label>
               <input {...register("name")} className="input" placeholder="e.g. Electronics" />
               {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Description (optional)</label>
               <input {...register("description")} className="input" placeholder="e.g. Electronic devices and accessories" />
             </div>
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2.5 border border-gray-200 text-sm font-medium rounded-xl">Cancel</button>
+              <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2.5 border border-gray-200 dark:border-slate-600 dark:text-slate-300 text-sm font-medium rounded-xl">Cancel</button>
               <button type="submit" disabled={isSubmitting} className="flex-1 py-2.5 bg-blue-700 text-white text-sm font-medium rounded-xl disabled:opacity-60">
                 {isSubmitting ? "Saving…" : editing ? "Update" : "Create"}
               </button>

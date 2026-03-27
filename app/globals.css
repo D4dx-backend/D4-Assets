@@ -28,11 +28,20 @@
   font-size: 0.875rem;
   outline: none;
   transition: box-shadow 0.15s;
+  background-color: #fff;
+  color: #111827;
 }
 .input:focus {
   box-shadow: 0 0 0 2px #3b82f6;
   border-color: transparent;
 }
+.dark .input {
+  background-color: #1e293b;
+  border-color: #475569;
+  color: #f1f5f9;
+}
+.dark .input::placeholder { color: #64748b; }
+.dark .input:focus { box-shadow: 0 0 0 2px #6366f1; }
 
 .select {
   width: 100%;
@@ -42,11 +51,18 @@
   font-size: 0.875rem;
   outline: none;
   background-color: #fff;
+  color: #111827;
 }
 .select:focus {
   box-shadow: 0 0 0 2px #3b82f6;
   border-color: transparent;
 }
+.dark .select {
+  background-color: #1e293b;
+  border-color: #475569;
+  color: #f1f5f9;
+}
+.dark .select:focus { box-shadow: 0 0 0 2px #6366f1; }
 
 /* Safe area for mobile bottom nav */
 .safe-bottom {

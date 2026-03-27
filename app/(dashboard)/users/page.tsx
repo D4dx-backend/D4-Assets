@@ -191,24 +191,24 @@ export default function UsersPage() {
       />
 
       {loading ? (
-        <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="bg-white rounded-xl h-20 animate-pulse border border-gray-100" />)}</div>
+        <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="bg-white dark:bg-slate-800 rounded-xl h-20 animate-pulse border border-gray-100 dark:border-slate-700" />)}</div>
       ) : users.length === 0 ? (
         <EmptyState icon={Users} title="No users" description="Add users to the system" />
       ) : (
         <div className="space-y-2">
           {users.map((u) => (
-            <div key={u._id} className="bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100">
+            <div key={u._id} className="bg-white dark:bg-slate-800 rounded-xl px-4 py-3 shadow-sm border border-gray-100 dark:border-slate-700">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-medium text-gray-900">{u.name}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{u.name}</p>
                     <Badge variant={roleVariant[u.role] ?? "gray"}>{u.role}</Badge>
                     {!u.isActive && <Badge variant="red">Inactive</Badge>}
                   </div>
-                  <p className="text-xs text-gray-500 mt-0.5">{u.email}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{u.email}</p>
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {MODULES.map(m => u.permissions?.[m.key] && (
-                      <span key={m.key} className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-md">{m.label}</span>
+                      <span key={m.key} className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded-md">{m.label}</span>
                     ))}
                   </div>
                 </div>
@@ -244,11 +244,11 @@ export default function UsersPage() {
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Shield className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-medium text-gray-700">Module Access</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Module Access</span>
               </div>
-              <div className="grid grid-cols-2 gap-y-2 gap-x-4 bg-gray-50 rounded-xl p-3 border border-gray-200">
+              <div className="grid grid-cols-2 gap-y-2 gap-x-4 bg-gray-50 dark:bg-slate-700/50 rounded-xl p-3 border border-gray-200 dark:border-slate-600">
                 {MODULES.map(m => (
-                  <label key={m.key} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <label key={m.key} className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300 cursor-pointer">
                     <input type="checkbox" {...register(`permissions.${m.key}`)} className="rounded text-blue-600" />
                     {m.label}
                   </label>
@@ -259,7 +259,7 @@ export default function UsersPage() {
               <input type="checkbox" {...register("isActive")} className="rounded" /> Active (can log in)
             </label>
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2.5 border border-gray-200 text-sm font-medium rounded-xl hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2.5 border border-gray-200 dark:border-slate-600 dark:text-slate-300 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700">Cancel</button>
               <button type="submit" disabled={isSubmitting} className="flex-1 py-2.5 bg-blue-700 text-white text-sm font-medium rounded-xl disabled:opacity-60">
                 {isSubmitting ? "Saving..." : editing ? "Update" : "Create"}
               </button>
@@ -274,7 +274,7 @@ export default function UsersPage() {
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">{label}</label>
       {children}
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>

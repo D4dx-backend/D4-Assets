@@ -183,26 +183,26 @@ export default function EventsPage() {
 
       {loading ? (
         <div className="space-y-3">
-          {[1, 2, 3].map((i) => <div key={i} className="bg-white rounded-xl h-24 animate-pulse border border-gray-100" />)}
+          {[1, 2, 3].map((i) => <div key={i} className="bg-white dark:bg-slate-800 rounded-xl h-24 animate-pulse border border-gray-100 dark:border-slate-700" />)}
         </div>
       ) : events.length === 0 ? (
         <EmptyState icon={CalendarDays} title="No events yet" description="Create your first event or program" />
       ) : (
         <div className="space-y-3">
           {events.map((ev) => (
-            <div key={ev._id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+            <div key={ev._id} className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-medium text-gray-900 text-sm">{ev.name}</h3>
+                    <h3 className="font-medium text-gray-900 dark:text-white text-sm">{ev.name}</h3>
                     <Badge variant={statusVariants[ev.status] ?? "gray"}>{ev.status}</Badge>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">📍 {ev.location}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">📍 {ev.location}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
                     {format(new Date(ev.fromDate), "dd MMM yyyy")} – {format(new Date(ev.toDate), "dd MMM yyyy")}
                   </p>
                   {ev.responsiblePerson && (
-                    <p className="text-xs text-gray-500 mt-0.5">👤 {ev.responsiblePerson.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">👤 {ev.responsiblePerson.name}</p>
                   )}
                   <Link
                     href={`/events/${ev._id}`}
@@ -246,7 +246,7 @@ export default function EventsPage() {
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-sm font-medium text-gray-700">Responsible Person</label>
+                <label className="text-sm font-medium text-gray-700 dark:text-slate-300">Responsible Person</label>
                 <button
                   type="button"
                   onClick={() => setShowAddPerson(prev => !prev)}
@@ -264,7 +264,7 @@ export default function EventsPage() {
                 <p className="mt-1 text-xs text-red-600">{errors.responsiblePerson.message}</p>
               )}
               {showAddPerson && (
-                <div className="mt-2 p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
+                <div className="mt-2 p-3 bg-gray-50 dark:bg-slate-700 rounded-xl border border-gray-200 dark:border-slate-600 space-y-2">
                   <input
                     value={quickName}
                     onChange={e => setQuickName(e.target.value)}
@@ -296,7 +296,7 @@ export default function EventsPage() {
               </select>
             </Field>
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2.5 border border-gray-200 text-sm font-medium rounded-xl hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2.5 border border-gray-200 dark:border-slate-600 dark:text-slate-300 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700">Cancel</button>
               <button type="submit" disabled={isSubmitting} className="flex-1 py-2.5 bg-blue-700 text-white text-sm font-medium rounded-xl disabled:opacity-60">
                 {isSubmitting ? "Saving…" : editing ? "Update" : "Create"}
               </button>
@@ -311,7 +311,7 @@ export default function EventsPage() {
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">{label}</label>
       {children}
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>

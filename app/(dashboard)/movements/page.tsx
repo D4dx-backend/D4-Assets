@@ -154,7 +154,7 @@ export default function MovementsPage() {
           <button
             key={s || "all"}
             onClick={() => setFilterStatus(s)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filterStatus === s ? "bg-blue-700 text-white" : "bg-gray-100 text-gray-600"}`}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filterStatus === s ? "bg-blue-700 text-white" : "bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300"}`}
           >
             {s || "All"}
           </button>
@@ -162,25 +162,25 @@ export default function MovementsPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="bg-white rounded-xl h-24 animate-pulse border border-gray-100" />)}</div>
+        <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="bg-white dark:bg-slate-800 rounded-xl h-24 animate-pulse border border-gray-100 dark:border-slate-700" />)}</div>
       ) : movements.length === 0 ? (
         <EmptyState icon={ArrowLeftRight} title="No movements" description="Check out an asset to get started" />
       ) : (
         <div className="space-y-3">
           {movements.map((m) => (
-            <div key={m._id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+            <div key={m._id} className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-medium text-gray-900 text-sm">{m.asset?.name}</h3>
+                    <h3 className="font-medium text-gray-900 dark:text-white text-sm">{m.asset?.name}</h3>
                     <Badge variant={m.status === "OUT" ? "orange" : "green"}>{m.status}</Badge>
                     {m.condition !== "good" && (
                       <Badge variant="red">{m.condition}</Badge>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">📅 {m.event?.name} · {m.event?.location}</p>
-                  <p className="text-xs text-gray-500">👤 {m.allocatedPerson?.name}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">📅 {m.event?.name} · {m.event?.location}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">👤 {m.allocatedPerson?.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">
                     OUT: {format(new Date(m.outDate), "dd MMM yyyy HH:mm")}
                     {m.inDate && ` · IN: ${format(new Date(m.inDate), "dd MMM yyyy HH:mm")}`}
                   </p>
@@ -228,7 +228,7 @@ export default function MovementsPage() {
               <textarea {...outForm.register("remarks")} className="input resize-none" rows={2} placeholder="Optional notes…" />
             </Field>
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => setShowOutModal(false)} className="flex-1 py-2.5 border border-gray-200 text-sm font-medium rounded-xl">Cancel</button>
+              <button type="button" onClick={() => setShowOutModal(false)} className="flex-1 py-2.5 border border-gray-200 dark:border-slate-600 dark:text-slate-300 text-sm font-medium rounded-xl">Cancel</button>
               <button type="submit" disabled={outForm.formState.isSubmitting} className="flex-1 py-2.5 bg-blue-700 text-white text-sm font-medium rounded-xl disabled:opacity-60 flex items-center justify-center gap-2">
                 <ArrowUpRight className="w-4 h-4" />
                 {outForm.formState.isSubmitting ? "Saving…" : "Check Out"}
@@ -241,9 +241,9 @@ export default function MovementsPage() {
       {/* Check In Modal */}
       {showInModal && selectedMovement && (
         <Modal title="Return Asset" onClose={() => { setShowInModal(false); setSelectedMovement(null); }}>
-          <div className="mb-4 p-3 bg-gray-50 rounded-xl text-sm">
-            <p className="font-medium">{selectedMovement.asset?.name}</p>
-            <p className="text-gray-500 text-xs">{selectedMovement.event?.name} · {selectedMovement.allocatedPerson?.name}</p>
+          <div className="mb-4 p-3 bg-gray-50 dark:bg-slate-700 rounded-xl text-sm">
+            <p className="font-medium dark:text-white">{selectedMovement.asset?.name}</p>
+            <p className="text-gray-500 dark:text-slate-400 text-xs">{selectedMovement.event?.name} · {selectedMovement.allocatedPerson?.name}</p>
           </div>
           <form onSubmit={inForm.handleSubmit(onInSubmit)} className="space-y-4">
             <Field label="Return By" error={inForm.formState.errors.returnBy?.message}>
@@ -291,7 +291,7 @@ export default function MovementsPage() {
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">{label}</label>
       {children}
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>

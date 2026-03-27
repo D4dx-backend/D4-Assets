@@ -83,16 +83,16 @@ export default function PersonsPage() {
       />
 
       {loading ? (
-        <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="bg-white rounded-xl h-16 animate-pulse border border-gray-100" />)}</div>
+        <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="bg-white dark:bg-slate-800 rounded-xl h-16 animate-pulse border border-gray-100 dark:border-slate-700" />)}</div>
       ) : persons.length === 0 ? (
         <EmptyState icon={UserCircle} title="No persons yet" description="Add responsible persons here" />
       ) : (
         <div className="space-y-2">
           {persons.map((p) => (
-            <div key={p._id} className="bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100 flex items-center justify-between">
+            <div key={p._id} className="bg-white dark:bg-slate-800 rounded-xl px-4 py-3 shadow-sm border border-gray-100 dark:border-slate-700 flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-900">{p.name}</p>
-                <p className="text-xs text-gray-500">{[p.department, p.phone, p.email].filter(Boolean).join(" · ")}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">{p.name}</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400">{[p.department, p.phone, p.email].filter(Boolean).join(" · ")}</p>
               </div>
               <div className="flex gap-1">
                 <button onClick={() => openEdit(p)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
@@ -111,7 +111,7 @@ export default function PersonsPage() {
             <Field label="Phone"><input {...register("phone")} className="input" placeholder="+1 234 567 890" /></Field>
             <Field label="Email" error={errors.email?.message}><input {...register("email")} className="input" placeholder="john@example.com" /></Field>
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2.5 border border-gray-200 text-sm font-medium rounded-xl">Cancel</button>
+              <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-2.5 border border-gray-200 dark:border-slate-600 dark:text-slate-300 text-sm font-medium rounded-xl">Cancel</button>
               <button type="submit" disabled={isSubmitting} className="flex-1 py-2.5 bg-blue-700 text-white text-sm font-medium rounded-xl disabled:opacity-60">
                 {isSubmitting ? "Saving…" : editing ? "Update" : "Add"}
               </button>
@@ -126,7 +126,7 @@ export default function PersonsPage() {
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">{label}</label>
       {children}
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
