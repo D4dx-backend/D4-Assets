@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import Image from "next/image";
 import { Delete, UserPlus, LogIn, Lock } from "lucide-react";
@@ -74,7 +73,6 @@ function MpinPad({
 
 // ─── SIGN IN ─────────────────────────────────────────────────────────────────
 function SignInForm({ onSwitch }: { onSwitch: () => void }) {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [mpin, setMpin]   = useState("");
   const [step, setStep]   = useState<"email" | "mpin">("email");
@@ -94,8 +92,9 @@ function SignInForm({ onSwitch }: { onSwitch: () => void }) {
       setMpin("");
     } else {
       toast.success("Welcome back!");
-      router.push("/dashboard");
-      router.refresh();
+      // Hard navigation ensures the new session cookie is sent to the server
+      // before the dashboard layout's auth() check runs, preventing a redirect loop.
+      window.location.href = "/dashboard";
     }
   }
 

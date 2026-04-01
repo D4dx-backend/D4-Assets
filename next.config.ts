@@ -10,7 +10,8 @@ const withPWA = require("next-pwa")({
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
-      { protocol: "https", hostname: "res.cloudinary.com" },
+      { protocol: "https", hostname: "*.digitaloceanspaces.com" },
+      { protocol: "https", hostname: "*.cdn.digitaloceanspaces.com" },
     ],
   },
 };
