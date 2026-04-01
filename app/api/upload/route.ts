@@ -1,10 +1,21 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
-// File upload – saves to /public/uploads (local storage)
-// For production consider using Cloudinary/S3
+const s3 = new S3Client({
+  endpoint: process.env.DO_SPACES_ENDPOINT!,
+  region: process.env.DO_SPACES_REGION ?? "nyc3",
+  credentials: {
+    accessKeyId: process.env.DO_SPACES_KEY!,
+    secretAccessKey: process.env.DO_SPACES_SECRET!,
+  },
+  forcePathStyle: false,
+});
+
+const BUCKET = process.env.DO_SPACES_BUCKET!;
+const CDN = process.env.DO_SPACES_CDN_ENDPOINT?.replace(/\/$/, "") ?? "";
+
 export async function POST(req: Request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -28,14 +39,23 @@ export async function POST(req: Request) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const ext = path.extname(file.name).toLowerCase();
-  const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
-  const uploadDir = path.join(process.cwd(), "public", "uploads");
+  const key = `uploads/${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
 
-  await mkdir(uploadDir, { recursive: true });
-  await writeFile(path.join(uploadDir, fileName), buffer);
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      Body: buffer,
+      ContentType: file.type,
+      ACL: "public-read",
+    })
+  );
+
+  const base = CDN || `${process.env.DO_SPACES_ENDPOINT}/${BUCKET}`;
+  const url = `${base}/${key}`;
 
   return NextResponse.json({
     success: true,
-    data: { url: `/uploads/${fileName}`, publicId: fileName },
+    data: { url, publicId: key },
   });
 }
