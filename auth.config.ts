@@ -1,12 +1,24 @@
 import type { NextAuthConfig } from "next-auth";
 
 // Edge-safe config: no mongoose, no Node.js-only modules.
-// Used in middleware (Edge runtime) and merged into auth.ts for the full config.
+// Used in the proxy (Edge runtime) and merged into auth.ts for the full config.
 export const authConfig: NextAuthConfig = {
   pages: {
     signIn: "/auth/login",
   },
   callbacks: {
+    authorized({ auth, request: { nextUrl } }) {
+      const isLoggedIn = !!auth?.user;
+      const isAuthPage = nextUrl.pathname.startsWith("/auth");
+
+      // Always allow access to /auth/* pages (login, signup, etc.)
+      if (isAuthPage) return true;
+
+      // Redirect unauthenticated users to login (NextAuth handles the redirect)
+      if (!isLoggedIn) return false;
+
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id as string;
