@@ -1,22 +1,21 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { getToken } from "next-auth/jwt";
+import NextAuth from "next-auth";
+import { authConfig } from "./auth.config";
 
-export async function middleware(req: NextRequest) {
+const { auth } = NextAuth(authConfig);
+
+export default auth((req) => {
   const { pathname } = req.nextUrl;
 
-  // Allow public auth routes
-  if (pathname.startsWith("/auth")) return NextResponse.next();
+  // Allow public auth routes through without any check
+  if (pathname.startsWith("/auth")) return;
 
-  // Edge-safe: read JWT token from cookie without touching mongoose
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-
-  if (!token) {
-    return NextResponse.redirect(new URL("/auth/login", req.url));
+  // req.auth is populated by NextAuth v5 when a valid JWT cookie is present
+  if (!req.auth) {
+    const loginUrl = req.nextUrl.clone();
+    loginUrl.pathname = "/auth/login";
+    return Response.redirect(loginUrl);
   }
-
-  return NextResponse.next();
-}
+});
 
 export const config = {
   matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico|icons|manifest.json|sw.js).*)"],
