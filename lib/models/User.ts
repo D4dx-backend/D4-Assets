@@ -17,7 +17,7 @@ export type UserRole = "admin" | "manager" | "operator" | "viewer";
 export interface IUser extends Document {
   name: string;
   email: string;
-  mpin: string;           // hashed 4-6 digit PIN
+  mpin: string;           // hashed 4 or 6 digit PIN
   role: UserRole;
   permissions: IPermissions;
   isActive: boolean;

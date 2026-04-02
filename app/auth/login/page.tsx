@@ -33,7 +33,7 @@ function MpinPad({
   return (
     <div ref={ref} tabIndex={0} onKeyDown={handleKeyDown} className="space-y-4 outline-none">
       <div className="flex justify-center gap-3">
-        {Array.from({ length: Math.max(value.length, 4) }).map((_, i) => (
+        {Array.from({ length: value.length <= 4 ? 4 : 6 }).map((_, i) => (
           <div
             key={i}
             className={`w-4 h-4 rounded-full border-2 transition-all duration-200 ${
@@ -81,7 +81,6 @@ function SignInForm() {
   function handleDigit(v: string) {
     setMpin(v);
     if (v.length === 6) doSignIn(v);
-    // 4- and 5-digit MPINs are submitted via the Verify button below
   }
 
   async function doSignIn(pin: string) {
@@ -132,9 +131,9 @@ function SignInForm() {
               Change
             </button>
           </div>
-          <p className="text-center text-sm text-white/60">Enter your 4–6 digit MPIN</p>
+          <p className="text-center text-sm text-white/60">Enter your 4 or 6 digit MPIN</p>
           <MpinPad value={mpin} onChange={handleDigit} disabled={loading} />
-          {mpin.length >= 4 && mpin.length < 6 && !loading && (
+          {mpin.length === 4 && !loading && (
             <button
               type="button"
               onClick={() => doSignIn(mpin)}

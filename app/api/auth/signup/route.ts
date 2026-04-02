@@ -19,8 +19,8 @@ export async function POST(req: Request) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
     }
-    if (!/^\d{4,6}$/.test(mpin)) {
-      return NextResponse.json({ error: "MPIN must be 4–6 digits" }, { status: 400 });
+    if (!/^\d{4}$|^\d{6}$/.test(mpin)) {
+      return NextResponse.json({ error: "MPIN must be exactly 4 or 6 digits" }, { status: 400 });
     }
 
     await connectDB();

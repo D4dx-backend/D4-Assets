@@ -52,7 +52,7 @@ const ROLE_DEFAULTS: Record<string, Permissions> = {
 const schema = z.object({
   name: z.string().min(1, "Name required"),
   email: z.string().email("Invalid email"),
-  mpin: z.string().regex(/^\d{4,6}$/, "Must be 4-6 digits").optional().or(z.literal("")),
+  mpin: z.string().regex(/^\d{4}$|^\d{6}$/, "Must be exactly 4 or 6 digits").optional().or(z.literal("")),
   role: z.enum(["admin", "manager", "operator", "viewer"]),
   isActive: z.boolean(),
   permissions: z.object({
@@ -286,7 +286,7 @@ export default function UsersPage() {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <Field label="Full Name" error={errors.name?.message}><input {...register("name")} className="input" placeholder="John Doe" /></Field>
             <Field label="Email" error={errors.email?.message}><input {...register("email")} type="email" className="input" /></Field>
-            <Field label={editing ? "New MPIN (blank = keep)" : "MPIN (4-6 digits)"} error={errors.mpin?.message}>
+            <Field label={editing ? "New MPIN (blank = keep)" : "MPIN (4 or 6 digits)"} error={errors.mpin?.message}>
               <input {...register("mpin")} type="password" inputMode="numeric" className="input tracking-widest text-lg" placeholder="••••" maxLength={6} />
             </Field>
             <Field label="Role">
