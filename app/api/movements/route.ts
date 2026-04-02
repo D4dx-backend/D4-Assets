@@ -4,6 +4,12 @@ import { connectDB } from "@/lib/mongodb";
 import Movement from "@/lib/models/Movement";
 import DamageReport from "@/lib/models/DamageReport";
 import { logActivity } from "@/lib/activityLogger";
+import mongoose from "mongoose";
+
+const SYSTEM_ADMIN_OID = new mongoose.Types.ObjectId("000000000000000000000000");
+function resolveOid(id: string) {
+  return mongoose.isValidObjectId(id) ? id : SYSTEM_ADMIN_OID;
+}
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -13,6 +19,9 @@ export async function GET(req: Request) {
   const eventId = searchParams.get("event");
   const assetId = searchParams.get("asset");
   const status = searchParams.get("status");
+  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
+  const skip = (page - 1) * limit;
 
   await connectDB();
   const query: Record<string, unknown> = {};
@@ -20,15 +29,24 @@ export async function GET(req: Request) {
   if (assetId) query.asset = assetId;
   if (status) query.status = status;
 
-  const movements = await Movement.find(query)
-    .populate("asset", "name category")
-    .populate("event", "name location fromDate toDate")
-    .populate("allocatedPerson", "name")
-    .populate("outBy", "name")
-    .sort({ createdAt: -1 })
-    .lean();
+  const [movements, total] = await Promise.all([
+    Movement.find(query)
+      .populate("asset", "name category")
+      .populate("event", "name location fromDate toDate")
+      .populate("allocatedPerson", "name")
+      .populate("outBy", "name")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Movement.countDocuments(query),
+  ]);
 
-  return NextResponse.json({ success: true, data: movements });
+  return NextResponse.json({
+    success: true,
+    data: movements,
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  });
 }
 
 export async function POST(req: Request) {
@@ -59,25 +77,30 @@ export async function POST(req: Request) {
     );
   }
 
-  const movement = await Movement.create({
-    asset,
-    event,
-    allocatedPerson,
-    outDate: body.outDate ? new Date(body.outDate) : new Date(),
-    outBy: session.user.id,
-    status: "OUT",
-    remarks: body.remarks,
-    createdBy: session.user.id,
-  });
+  try {
+    const movement = await Movement.create({
+      asset,
+      event,
+      allocatedPerson,
+      outDate: body.outDate ? new Date(body.outDate) : new Date(),
+      outBy: resolveOid(session.user.id),
+      status: "OUT",
+      remarks: body.remarks,
+      createdBy: resolveOid(session.user.id),
+    });
 
-  await logActivity({
-    userId: session.user.id,
-    userName: session.user.name,
-    action: "OUT",
-    module: "Movements",
-    resourceId: movement._id.toString(),
-    details: `Asset checked out for event`,
-  });
+    await logActivity({
+      userId: session.user.id,
+      userName: session.user.name,
+      action: "OUT",
+      module: "Movements",
+      resourceId: movement._id.toString(),
+      details: `Asset checked out for event`,
+    });
 
-  return NextResponse.json({ success: true, data: movement }, { status: 201 });
+    return NextResponse.json({ success: true, data: movement }, { status: 201 });
+  } catch (err) {
+    console.error("POST /api/movements error:", err);
+    return NextResponse.json({ error: "Failed to create movement" }, { status: 500 });
+  }
 }

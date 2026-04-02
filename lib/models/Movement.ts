@@ -37,6 +37,11 @@ const MovementSchema = new Schema<IMovement>(
   { timestamps: true }
 );
 
+MovementSchema.index({ event: 1, status: 1 });
+MovementSchema.index({ asset: 1, status: 1 });
+MovementSchema.index({ createdAt: -1 });
+MovementSchema.index({ status: 1, createdAt: -1 });
+
 const Movement: Model<IMovement> =
   models.Movement ?? mongoose.model<IMovement>("Movement", MovementSchema);
 export default Movement;

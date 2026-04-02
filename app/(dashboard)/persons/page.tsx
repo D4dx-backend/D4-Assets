@@ -9,7 +9,9 @@ import { Plus, Pencil, Trash2, UserCircle, Download } from "lucide-react";
 import { exportToCSV, exportToExcel, exportToPDF } from "@/lib/exportUtils";
 import PageHeader from "@/components/PageHeader";
 import Modal from "@/components/Modal";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
+import Pagination from "@/components/Pagination";
 import { useSession } from "next-auth/react";
 
 interface Person { _id: string; name: string; phone?: string; email?: string; department?: string }
@@ -29,18 +31,25 @@ export default function PersonsPage() {
 
   const [persons, setPersons] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1, limit: 10 });
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Person | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<PersonForm>({ resolver: zodResolver(schema) });
 
   const fetchPersons = useCallback(async () => {
     setLoading(true);
-    const res = await fetch("/api/persons");
-    const data = await res.json() as { success: boolean; data: Person[] };
-    if (data.success) setPersons(data.data);
+    const res = await fetch(`/api/persons?page=${page}&limit=10`);
+    const data = await res.json() as { success: boolean; data: Person[]; pagination: { total: number; totalPages: number; limit: number } };
+    if (data.success) {
+      setPersons(data.data);
+      setPagination(data.pagination);
+    }
     setLoading(false);
-  }, []);
+  }, [page]);
 
   useEffect(() => { fetchPersons(); }, [fetchPersons]);
 
@@ -56,11 +65,19 @@ export default function PersonsPage() {
     else toast.error(result.error ?? "Error");
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this person?")) return;
-    const res = await fetch(`/api/persons/${id}`, { method: "DELETE" });
-    const data = await res.json() as { success: boolean };
-    if (data.success) { toast.success("Deleted"); fetchPersons(); }
+  function handleDelete(p: Person) {
+    setDeleteConfirm({ id: p._id, name: p.name });
+  }
+
+  async function confirmDelete() {
+    if (!deleteConfirm) return;
+    setDeleting(true);
+    const res = await fetch(`/api/persons/${deleteConfirm.id}`, { method: "DELETE" });
+    const data = await res.json() as { success: boolean; error?: string };
+    setDeleting(false);
+    setDeleteConfirm(null);
+    if (data.success) { toast.success("Person deleted"); fetchPersons(); }
+    else toast.error(data.error ?? "Failed to delete");
   }
 
   return (
@@ -96,12 +113,20 @@ export default function PersonsPage() {
               </div>
               <div className="flex gap-1">
                 <button onClick={() => openEdit(p)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
-                {isAdmin && <button onClick={() => handleDelete(p._id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>}
+                {isAdmin && <button onClick={() => handleDelete(p)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>}
               </div>
             </div>
           ))}
         </div>
       )}
+
+      <Pagination
+        page={page}
+        totalPages={pagination.totalPages}
+        total={pagination.total}
+        limit={pagination.limit}
+        onPageChange={setPage}
+      />
 
       {showModal && (
         <Modal title={editing ? "Edit Person" : "Add Person"} onClose={() => setShowModal(false)}>
@@ -118,6 +143,16 @@ export default function PersonsPage() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {deleteConfirm && (
+        <ConfirmDialog
+          title="Delete Person"
+          message={`Are you sure you want to delete "${deleteConfirm.name}"? This action cannot be undone.`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteConfirm(null)}
+          loading={deleting}
+        />
       )}
     </div>
   );

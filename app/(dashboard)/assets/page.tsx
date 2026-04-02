@@ -8,9 +8,12 @@ import toast from "react-hot-toast";
 import { Plus, Pencil, Trash2, Search, Package, FileText, Download } from "lucide-react";
 import { exportToCSV, exportToExcel, exportToPDF } from "@/lib/exportUtils";
 import PageHeader from "@/components/PageHeader";
+import SearchInput from "@/components/SearchInput";
 import Modal from "@/components/Modal";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
 import Badge from "@/components/Badge";
+import Pagination from "@/components/Pagination";
 import { format } from "date-fns";
 import { useSession } from "next-auth/react";
 
@@ -19,6 +22,7 @@ interface Asset {
   name: string;
   category: string;
   dateOfPurchase: string;
+  noWarranty: boolean;
   warrantyDetails: string;
   warrantyExpiryDate?: string;
   billUrl?: string;
@@ -33,6 +37,7 @@ const assetSchema = z.object({
   name: z.string().min(1, "Asset name is required"),
   category: z.string().min(1, "Category is required"),
   dateOfPurchase: z.string().min(1, "Date of purchase is required"),
+  noWarranty: z.boolean().optional(),
   warrantyDetails: z.string().optional(),
   warrantyExpiryDate: z.string().optional(),
 });
@@ -44,33 +49,56 @@ export default function AssetsPage() {
   const isAdmin = session?.user?.role === "admin";
 
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [allAssetNames, setAllAssetNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1, limit: 10 });
   const [showModal, setShowModal] = useState(false);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [billFile, setBillFile] = useState<File | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const {
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<AssetForm>({ resolver: zodResolver(assetSchema) });
 
+  const noWarranty = watch("noWarranty");
+
   const fetchAssets = useCallback(async () => {
     setLoading(true);
-    const params = search ? `?search=${encodeURIComponent(search)}` : "";
-    const res = await fetch(`/api/assets${params}`);
-    const data = await res.json() as { success: boolean; data: Asset[] };
-    if (data.success) setAssets(data.data);
+    const params = new URLSearchParams({ page: String(page), limit: "10" });
+    if (search) params.set("search", search);
+    const res = await fetch(`/api/assets?${params.toString()}`);
+    const data = await res.json() as { success: boolean; data: Asset[]; pagination: { total: number; totalPages: number; limit: number } };
+    if (data.success) {
+      setAssets(data.data);
+      setPagination(data.pagination);
+    }
     setLoading(false);
+  }, [search, page]);
+
+  useEffect(() => {
+    setPage(1);
   }, [search]);
 
   useEffect(() => {
-    const timer = setTimeout(() => { fetchAssets(); }, 300);
+    const timer = setTimeout(() => { fetchAssets(); }, 600);
     return () => clearTimeout(timer);
   }, [fetchAssets]);
+
+  const fetchAllAssetNames = useCallback(async () => {
+    const res = await fetch("/api/assets?limit=500");
+    const data = await res.json() as { success: boolean; data: Asset[] };
+    if (data.success) setAllAssetNames(data.data.map((a) => a.name));
+  }, []);
 
   const fetchCategories = useCallback(async () => {
     const res = await fetch("/api/categories");
@@ -79,8 +107,9 @@ export default function AssetsPage() {
   }, []);
 
   useEffect(() => {
+    fetchAllAssetNames();
     fetchCategories();
-  }, [fetchCategories]);
+  }, [fetchAllAssetNames, fetchCategories]);
 
   function openCreate() {
     setEditingAsset(null);
@@ -96,6 +125,7 @@ export default function AssetsPage() {
       name: asset.name,
       category: asset.category,
       dateOfPurchase: asset.dateOfPurchase?.slice(0, 10),
+      noWarranty: asset.noWarranty ?? false,
       warrantyDetails: asset.warrantyDetails,
       warrantyExpiryDate: asset.warrantyExpiryDate?.slice(0, 10) ?? "",
     });
@@ -133,18 +163,29 @@ export default function AssetsPage() {
       toast.success(editingAsset ? "Asset updated" : "Asset created");
       setShowModal(false);
       fetchAssets();
+      fetchAllAssetNames();
     } else {
       toast.error(result.error ?? "Something went wrong");
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this asset?")) return;
-    const res = await fetch(`/api/assets/${id}`, { method: "DELETE" });
-    const data = await res.json() as { success: boolean };
+  async function handleDelete(asset: Asset) {
+    setDeleteConfirm({ id: asset._id, name: asset.name });
+  }
+
+  async function confirmDelete() {
+    if (!deleteConfirm) return;
+    setDeleting(true);
+    const res = await fetch(`/api/assets/${deleteConfirm.id}`, { method: "DELETE" });
+    const data = await res.json() as { success: boolean; error?: string };
+    setDeleting(false);
+    setDeleteConfirm(null);
     if (data.success) {
       toast.success("Asset deleted");
       fetchAssets();
+      fetchAllAssetNames();
+    } else {
+      toast.error(data.error ?? "Failed to delete");
     }
   }
 
@@ -171,16 +212,13 @@ export default function AssetsPage() {
       />
 
       {/* Search */}
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search assets…"
-          className="w-full pl-9 pr-4 py-2.5 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
+      <SearchInput
+        value={search}
+        onChange={(v) => setSearch(v)}
+        suggestions={allAssetNames}
+        placeholder="Search assets…"
+        className="mb-4"
+      />
 
       {/* Asset list */}
       {loading ? (
@@ -204,7 +242,12 @@ export default function AssetsPage() {
         <div className="space-y-3">
           {assets.map((asset) => {
             const warrantyExpired =
-              asset.warrantyExpiryDate && new Date(asset.warrantyExpiryDate) < new Date();
+              !asset.noWarranty && asset.warrantyExpiryDate && new Date(asset.warrantyExpiryDate) < new Date();
+            const warrantyExpiringSoon =
+              !asset.noWarranty &&
+              asset.warrantyExpiryDate &&
+              !warrantyExpired &&
+              new Date(asset.warrantyExpiryDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
             return (
               <div
                 key={asset._id}
@@ -215,12 +258,14 @@ export default function AssetsPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-medium text-gray-900 dark:text-white text-sm">{asset.name}</h3>
                       <Badge variant="blue">{asset.category}</Badge>
+                      {asset.noWarranty && <Badge variant="gray">No Warranty</Badge>}
                       {warrantyExpired && <Badge variant="red">Warranty Expired</Badge>}
+                      {warrantyExpiringSoon && <Badge variant="yellow">Expiring Soon</Badge>}
                     </div>
                     <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
                       Purchased: {format(new Date(asset.dateOfPurchase), "dd MMM yyyy")}
                     </p>
-                    {asset.warrantyDetails && (
+                    {!asset.noWarranty && asset.warrantyDetails && (
                       <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{asset.warrantyDetails}</p>
                     )}
                   </div>
@@ -243,7 +288,7 @@ export default function AssetsPage() {
                     </button>
                     {isAdmin && (
                       <button
-                        onClick={() => handleDelete(asset._id)}
+                        onClick={() => handleDelete(asset)}
                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -256,6 +301,14 @@ export default function AssetsPage() {
           })}
         </div>
       )}
+
+      <Pagination
+        page={page}
+        totalPages={pagination.totalPages}
+        total={pagination.total}
+        limit={pagination.limit}
+        onPageChange={setPage}
+      />
 
       {/* Asset Modal */}
       {showModal && (
@@ -281,13 +334,38 @@ export default function AssetsPage() {
               <input type="date" {...register("dateOfPurchase")} className="input" />
             </Field>
 
-            <Field label="Warranty Details">
-              <input {...register("warrantyDetails")} className="input" placeholder="e.g. 1 year manufacturer" />
-            </Field>
+            {/* No Warranty toggle */}
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  {...register("noWarranty")}
+                  onChange={(e) => {
+                    setValue("noWarranty", e.target.checked);
+                    if (e.target.checked) {
+                      setValue("warrantyDetails", "");
+                      setValue("warrantyExpiryDate", "");
+                    }
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-10 h-5 bg-gray-200 dark:bg-slate-600 rounded-full peer-checked:bg-blue-600 transition-colors" />
+                <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5" />
+              </div>
+              <span className="text-sm font-medium text-gray-700 dark:text-slate-300">No Warranty Item</span>
+            </label>
 
-            <Field label="Warranty Expiry Date">
-              <input type="date" {...register("warrantyExpiryDate")} className="input" />
-            </Field>
+            {!noWarranty && (
+              <>
+                <Field label="Warranty Details">
+                  <input {...register("warrantyDetails")} className="input" placeholder="e.g. 1 year manufacturer" />
+                </Field>
+
+                <Field label="Warranty Expiry Date">
+                  <input type="date" {...register("warrantyExpiryDate")} className="input" />
+                </Field>
+              </>
+            )}
 
             <Field label="Bill / Invoice (PDF or Image)">
               <input
@@ -316,6 +394,16 @@ export default function AssetsPage() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {deleteConfirm && (
+        <ConfirmDialog
+          title="Delete Asset"
+          message={`Are you sure you want to delete "${deleteConfirm.name}"? This action cannot be undone.`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteConfirm(null)}
+          loading={deleting}
+        />
       )}
     </div>
   );

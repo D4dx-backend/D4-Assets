@@ -23,5 +23,7 @@ const PersonSchema = new Schema<IPerson>(
   { timestamps: true }
 );
 
+PersonSchema.index({ isActive: 1, name: 1 });
+
 const Person: Model<IPerson> = models.Person ?? mongoose.model<IPerson>("Person", PersonSchema);
 export default Person;

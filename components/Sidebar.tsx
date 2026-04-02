@@ -17,6 +17,7 @@ import {
   Tag,
   Sun,
   Moon,
+  ScanSearch,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/ThemeProvider";
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/assets", label: "Assets", icon: Package },
   { href: "/movements", label: "Movements", icon: ArrowLeftRight },
+  { href: "/availability", label: "Check Availability", icon: ScanSearch },
   { href: "/events", label: "Events", icon: CalendarDays },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },

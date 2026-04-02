@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { connectDB } from "@/lib/mongodb";
 import Event from "@/lib/models/Event";
+import Movement from "@/lib/models/Movement";
 import { logActivity } from "@/lib/activityLogger";
 
 interface RouteParams {
@@ -66,8 +67,21 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
 
   const { id } = await params;
   await connectDB();
-  const event = await Event.findByIdAndUpdate(id, { isActive: false }, { new: true });
+
+  const event = await Event.findById(id);
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
+
+  if (event.status === "completed") {
+    return NextResponse.json({ error: "Cannot delete a completed event" }, { status: 400 });
+  }
+
+  const hasIssued = await Movement.exists({ event: id, status: "OUT" });
+  if (hasIssued) {
+    return NextResponse.json({ error: "Cannot delete an event with assets still issued" }, { status: 400 });
+  }
+
+  event.isActive = false;
+  await event.save();
 
   await logActivity({
     userId: session.user.id,

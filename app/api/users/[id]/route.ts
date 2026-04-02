@@ -67,7 +67,7 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
   }
 
   await connectDB();
-  const user = await User.findByIdAndUpdate(id, { isActive: false }, { new: true });
+  const user = await User.findByIdAndDelete(id);
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
   await logActivity({
@@ -76,7 +76,7 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
     action: "DELETE",
     module: "Users",
     resourceId: id,
-    details: `Deactivated user ${user.email}`,
+    details: `Deleted user ${user.email}`,
   });
 
   return NextResponse.json({ success: true });

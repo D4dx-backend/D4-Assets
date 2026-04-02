@@ -4,6 +4,7 @@ export interface IAsset extends Document {
   name: string;
   category: string;
   dateOfPurchase: Date;
+  noWarranty: boolean;
   warrantyDetails: string;
   warrantyExpiryDate?: Date;
   billUrl?: string;
@@ -19,6 +20,7 @@ const AssetSchema = new Schema<IAsset>(
     name: { type: String, required: true, trim: true },
     category: { type: String, required: true, trim: true },
     dateOfPurchase: { type: Date, required: true },
+    noWarranty: { type: Boolean, default: false },
     warrantyDetails: { type: String, default: "" },
     warrantyExpiryDate: { type: Date },
     billUrl: { type: String },
@@ -30,6 +32,8 @@ const AssetSchema = new Schema<IAsset>(
 );
 
 AssetSchema.index({ name: "text", category: "text" });
+AssetSchema.index({ isActive: 1, createdAt: -1 });
+AssetSchema.index({ isActive: 1, category: 1, createdAt: -1 });
 
 const Asset: Model<IAsset> = models.Asset ?? mongoose.model<IAsset>("Asset", AssetSchema);
 export default Asset;

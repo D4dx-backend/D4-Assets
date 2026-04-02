@@ -1,19 +1,25 @@
-"use client";
+﻿"use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import {
   ArrowLeft,
-  ArrowUpRight,
-  ArrowDownLeft,
+  CheckCircle2,
+  Circle,
+  ChevronDown,
+  ChevronUp,
   AlertTriangle,
   Package,
+  Search,
+  SendHorizonal,
 } from "lucide-react";
 import Badge from "@/components/Badge";
-import Modal from "@/components/Modal";
+import SearchInput from "@/components/SearchInput";
 import { format } from "date-fns";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface EventDetail {
   _id: string;
@@ -38,9 +44,25 @@ interface Movement {
   status: "OUT" | "IN";
   outDate: string;
   inDate?: string;
-  condition?: string;
+  condition?: "good" | "damaged" | "defective" | "missing";
+  remarks?: string;
   allocatedPerson?: { _id: string; name: string };
 }
+
+type ReturnCondition = "good" | "damaged" | "defective" | "missing";
+
+interface AssetRow {
+  asset: Asset;
+  movement: Movement | null;
+  // Return inline state
+  inlineOpen: boolean;
+  noteOpen: boolean;
+  returnCondition: ReturnCondition;
+  returnRemarks: string;
+  saving: boolean;
+}
+
+// ─── Constants ───────────────────────────────────────────────────────────────
 
 const statusVariants: Record<string, "blue" | "green" | "gray"> = {
   upcoming: "blue",
@@ -48,27 +70,37 @@ const statusVariants: Record<string, "blue" | "green" | "gray"> = {
   completed: "gray",
 };
 
-function getOpenMovement(assetId: string, movements: Movement[]): Movement | null {
-  return (
-    movements.find((m) => m.asset._id === assetId && m.status === "OUT") ?? null
-  );
-}
+const conditionLabel: Record<ReturnCondition, string> = {
+  good: "Good",
+  damaged: "Damaged",
+  defective: "Defective",
+  missing: "Missing",
+};
+
+const conditionBadge: Record<ReturnCondition, string> = {
+  good: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  damaged: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  defective: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+  missing: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+};
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
 
   const [event, setEvent] = useState<EventDetail | null>(null);
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [movements, setMovements] = useState<Movement[]>([]);
+  const [rows, setRows] = useState<AssetRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [issuing, setIssuing] = useState(false);
 
-  // Return modal state
-  const [returnMovement, setReturnMovement] = useState<Movement | null>(null);
-  const [returnCondition, setReturnCondition] = useState<"good" | "damaged" | "defective" | "missing">("good");
-  const [returnNotes, setReturnNotes] = useState("");
-  const [returning, setReturning] = useState(false);
+  // Batch OUT local state
+  const [pendingOutIds, setPendingOutIds] = useState<Set<string>>(new Set());
+  const [submittingOut, setSubmittingOut] = useState(false);
+
+  // Search
+  const [search, setSearch] = useState("");
+
+  // ── Fetch ─────────────────────────────────────────────────────────────────
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -82,18 +114,41 @@ export default function EventDetailPage() {
       aRes.json() as Promise<{ success: boolean; data: Asset[] }>,
       mRes.json() as Promise<{ success: boolean; data: Movement[] }>,
     ]);
+
     if (evData.success) setEvent(evData.data);
-    if (aData.success) setAssets(aData.data);
-    if (mData.success) setMovements(mData.data);
+
+    if (aData.success && mData.success) {
+      const movMap = new Map<string, Movement>();
+      for (const m of mData.data) movMap.set(m.asset._id, m);
+      setRows(
+        aData.data.map((asset) => ({
+          asset,
+          movement: movMap.get(asset._id) ?? null,
+          inlineOpen: false,
+          noteOpen: false,
+          returnCondition: "good",
+          returnRemarks: "",
+          saving: false,
+        }))
+      );
+    }
     setLoading(false);
   }, [id]);
 
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  function toggleSelect(assetId: string) {
-    setSelectedIds((prev) => {
+  // ── Row helper ────────────────────────────────────────────────────────────
+
+  function setRow(assetId: string, patch: Partial<AssetRow>) {
+    setRows((prev) =>
+      prev.map((r) => (r.asset._id === assetId ? { ...r, ...patch } : r))
+    );
+  }
+
+  // ── Batch OUT ─────────────────────────────────────────────────────────────
+
+  function togglePendingOut(assetId: string) {
+    setPendingOutIds((prev) => {
       const next = new Set(prev);
       if (next.has(assetId)) next.delete(assetId);
       else next.add(assetId);
@@ -101,81 +156,82 @@ export default function EventDetailPage() {
     });
   }
 
-  function toggleAll(available: Asset[]) {
-    if (selectedIds.size === available.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(available.map((a) => a._id)));
-    }
-  }
-
-  async function issueSelected() {
-    if (selectedIds.size === 0) return;
-    setIssuing(true);
-
-    const personId = event?.responsiblePerson?._id;
+  async function submitPendingOut() {
+    if (pendingOutIds.size === 0) return;
+    setSubmittingOut(true);
     const results = await Promise.all(
-      [...selectedIds].map((assetId) =>
+      [...pendingOutIds].map((assetId) =>
         fetch("/api/movements", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             asset: assetId,
             event: id,
-            allocatedPerson: personId,
+            allocatedPerson: event?.responsiblePerson?._id,
           }),
         }).then((r) => r.json() as Promise<{ success: boolean; error?: string }>)
       )
     );
-
-    setIssuing(false);
-    const failed = results.filter((r) => !r.success);
-    if (failed.length > 0) {
-      toast.error(`${failed.length} asset(s) could not be issued`);
-    } else {
-      toast.success(`${selectedIds.size} asset(s) issued`);
-    }
-    setSelectedIds(new Set());
+    setSubmittingOut(false);
+    const failed = results.filter((r) => !r.success).length;
+    if (failed > 0) toast.error(`${failed} asset(s) could not be issued`);
+    else toast.success(`${pendingOutIds.size} asset(s) issued`);
+    setPendingOutIds(new Set());
     fetchAll();
   }
 
-  async function handleReturn() {
-    if (!returnMovement) return;
-    setReturning(true);
+  // ── Return (IN) ───────────────────────────────────────────────────────────
 
-    const res = await fetch(`/api/movements/${returnMovement._id}`, {
+  async function returnAsset(row: AssetRow) {
+    if (!row.movement) return;
+    setRow(row.asset._id, { saving: true });
+    const res = await fetch(`/api/movements/${row.movement._id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        condition: returnCondition,
-        remarks: returnNotes,
+        condition: row.returnCondition,
+        remarks: row.returnRemarks || undefined,
       }),
     });
     const data = await res.json() as { success: boolean; error?: string };
-    setReturning(false);
-
     if (data.success) {
-      toast.success("Asset returned successfully");
-      setReturnMovement(null);
-      setReturnCondition("good");
-      setReturnNotes("");
+      toast.success("Asset returned");
       fetchAll();
     } else {
       toast.error(data.error ?? "Return failed");
+      setRow(row.asset._id, { saving: false });
     }
   }
 
-  function openReturn(movement: Movement) {
-    setReturnMovement(movement);
-    setReturnCondition("good");
-    setReturnNotes("");
-  }
+  // ── Derived ───────────────────────────────────────────────────────────────
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) =>
+        r.asset.name.toLowerCase().includes(q) ||
+        r.asset.category.toLowerCase().includes(q)
+    );
+  }, [rows, search]);
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, AssetRow[]>();
+    for (const row of filtered) {
+      const cat = row.asset.category || "Uncategorized";
+      if (!map.has(cat)) map.set(cat, []);
+      map.get(cat)!.push(row);
+    }
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [filtered]);
+
+  // ── Loading ───────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
       <div className="space-y-3">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-16 bg-white dark:bg-slate-800 rounded-xl animate-pulse border border-gray-100 dark:border-slate-700" />
+          <div key={i} className="h-14 bg-white dark:bg-slate-800 rounded-xl animate-pulse border border-gray-100 dark:border-slate-700" />
         ))}
       </div>
     );
@@ -185,22 +241,23 @@ export default function EventDetailPage() {
     return (
       <div className="py-12 text-center text-gray-500 dark:text-slate-400">
         Event not found.{" "}
-        <Link href="/events" className="text-blue-600 underline">
-          Back to Events
-        </Link>
+        <Link href="/events" className="text-blue-600 underline">Back to Events</Link>
       </div>
     );
   }
 
-  const availableAssets = assets.filter((a) => getOpenMovement(a._id, movements) === null);
-  const issuedAssets = assets.filter((a) => getOpenMovement(a._id, movements) !== null);
-  const allAvailableSelected = availableAssets.length > 0 && selectedIds.size === availableAssets.length;
+  const availableCount = rows.filter((r) => r.movement === null).length;
+  const issuedCount = rows.filter((r) => r.movement?.status === "OUT").length;
+  const returnedCount = rows.filter((r) => r.movement?.status === "IN").length;
 
   return (
     <div>
-      {/* Back + title */}
+      {/* ── Back + title ─────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 mb-5">
-        <Link href="/events" className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+        <Link
+          href="/events"
+          className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+        >
           <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-slate-400" />
         </Link>
         <div className="flex-1 min-w-0">
@@ -210,7 +267,7 @@ export default function EventDetailPage() {
         <Badge variant={statusVariants[event.status] ?? "gray"}>{event.status}</Badge>
       </div>
 
-      {/* Event info card */}
+      {/* ── Event info card ──────────────────────────────────────────────── */}
       <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-slate-700 mb-5">
         <div className="grid grid-cols-2 gap-y-3 text-sm">
           <div>
@@ -230,181 +287,276 @@ export default function EventDetailPage() {
         </div>
       </div>
 
-      {/* ── Issued assets ─────────────────────────────────── */}
-      {issuedAssets.length > 0 && (
-        <div className="mb-5">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
-            Currently Issued ({issuedAssets.length})
-          </h2>
-          <div className="space-y-2">
-            {issuedAssets.map((asset) => {
-              const mv = getOpenMovement(asset._id, movements)!;
-              return (
-                <div
-                  key={asset._id}
-                  className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800/40 rounded-xl p-3 flex items-center gap-3"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm text-gray-900 dark:text-white">{asset.name}</span>
-                      <span className="text-xs text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
-                        {asset.category}
-                      </span>
-                    </div>
-                    <p className="text-xs text-orange-600 mt-0.5">
-                      Issued {format(new Date(mv.outDate), "dd MMM yyyy")}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => openReturn(mv)}
-                    className="flex items-center gap-1.5 text-xs bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1.5 rounded-lg font-medium transition-colors flex-shrink-0"
-                  >
-                    <ArrowDownLeft className="w-3.5 h-3.5" />
-                    Return
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* ── Stats bar ────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-4 mb-4 text-xs text-gray-500 dark:text-slate-400">
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full bg-gray-300 dark:bg-slate-600 inline-block" />
+          {availableCount} available
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />
+          {issuedCount} issued
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+          {returnedCount} returned
+        </span>
+      </div>
 
-      {/* ── Available assets ───────────────────────────────── */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-slate-300">
-            Available Assets ({availableAssets.length})
-          </h2>
-          <div className="flex items-center gap-2">
-            {availableAssets.length > 0 && (
-              <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={allAvailableSelected}
-                  onChange={() => toggleAll(availableAssets)}
-                  className="w-3.5 h-3.5 rounded text-blue-600"
-                />
-                Select all
-              </label>
-            )}
-            {selectedIds.size > 0 && (
-              <button
-                onClick={issueSelected}
-                disabled={issuing}
-                className="flex items-center gap-1.5 bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-60 transition-colors"
-              >
-                <ArrowUpRight className="w-3.5 h-3.5" />
-                {issuing
-                  ? "Issuing…"
-                  : `Issue ${selectedIds.size} Asset${selectedIds.size > 1 ? "s" : ""}`}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {availableAssets.length === 0 ? (
-          <div className="text-center py-10 text-gray-400 dark:text-slate-500 text-sm">
-            <Package className="w-8 h-8 mx-auto mb-2 opacity-40" />
-            All assets are currently issued
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {availableAssets.map((asset) => {
-              const isSelected = selectedIds.has(asset._id);
-              return (
-                <div
-                  key={asset._id}
-                  onClick={() => toggleSelect(asset._id)}
-                  className={`bg-white dark:bg-slate-800 border rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all select-none ${
-                    isSelected
-                      ? "border-blue-300 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-500"
-                      : "border-gray-100 dark:border-slate-700 hover:border-gray-200 dark:hover:border-slate-600"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => toggleSelect(asset._id)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-4 h-4 rounded text-blue-600 flex-shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <span className="font-medium text-sm text-gray-900 dark:text-white">{asset.name}</span>
-                    <span className="text-xs text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded ml-2">
-                      {asset.category}
-                    </span>
-                  </div>
-                  <span className="text-xs text-gray-400 dark:text-slate-500 flex-shrink-0">Available</span>
-                </div>
-              );
-            })}
-          </div>
+      {/* ── Search + Submit batch OUT ─────────────────────────────────────── */}
+      <div className="flex items-center gap-2 mb-4">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          suggestions={rows.map((r) => r.asset.name)}
+          placeholder="Search assets or category…"
+          className="flex-1"
+          inputClassName="py-2"
+        />
+        {pendingOutIds.size > 0 && (
+          <button
+            onClick={submitPendingOut}
+            disabled={submittingOut}
+            className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-60 whitespace-nowrap transition-colors"
+          >
+            <SendHorizonal className="w-4 h-4" />
+            {submittingOut ? "Issuing…" : `Issue ${pendingOutIds.size} item${pendingOutIds.size > 1 ? "s" : ""}`}
+          </button>
         )}
       </div>
 
-      {/* ── Return modal ────────────────────────────────────── */}
-      {returnMovement && (
-        <Modal title="Return Asset" onClose={() => setReturnMovement(null)}>
-          <div className="space-y-4">
-            <p className="text-sm text-gray-700 dark:text-slate-300">
-              Returning <strong>{returnMovement.asset.name}</strong>
-            </p>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Condition</label>
-              <select
-                value={returnCondition}
-                onChange={(e) =>
-                  setReturnCondition(
-                    e.target.value as "good" | "damaged" | "defective" | "missing"
-                  )
-                }
-                className="select"
-              >
-                <option value="good">Good — No issues</option>
-                <option value="damaged">Damaged</option>
-                <option value="defective">Defective / Malfunctioning</option>
-                <option value="missing">Missing / Lost</option>
-              </select>
-            </div>
-
-            {returnCondition !== "good" && (
-              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
-                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <span>A damage report will be automatically created for this asset.</span>
+      {/* ── Category-grouped table ────────────────────────────────────────── */}
+      {rows.length === 0 ? (
+        <div className="py-12 text-center text-gray-400 dark:text-slate-500 text-sm">
+          <Package className="w-8 h-8 mx-auto mb-2 opacity-40" />
+          No assets found
+        </div>
+      ) : grouped.length === 0 ? (
+        <div className="py-8 text-center text-gray-400 dark:text-slate-500 text-sm">No results for "{search}"</div>
+      ) : (
+        <div className="space-y-4">
+          {grouped.map(([category, catRows]) => (
+            <div key={category} className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
+              {/* Category header */}
+              <div className="px-4 py-2 bg-gray-50 dark:bg-slate-700/50 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-600 dark:text-slate-300 uppercase tracking-wider">{category}</span>
+                <span className="text-xs text-gray-400 dark:text-slate-500">{catRows.length} item{catRows.length !== 1 ? "s" : ""}</span>
               </div>
-            )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Notes</label>
-              <textarea
-                value={returnNotes}
-                onChange={(e) => setReturnNotes(e.target.value)}
-                rows={3}
-                className="input resize-none"
-                placeholder="Describe any damage or remarks…"
-              />
+              {/* Column headers */}
+              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] bg-gray-50/50 dark:bg-slate-700/20 border-b border-gray-100 dark:border-slate-700/50">
+                <div className="px-4 py-2 text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide">Item</div>
+                <div className="px-3 py-2 text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide text-center w-14">OUT</div>
+                <div className="px-3 py-2 text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide text-center w-14">IN</div>
+                <div className="px-3 py-2 text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide text-center w-28">Condition</div>
+                <div className="px-4 py-2 text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide w-32">Remarks</div>
+              </div>
+
+              {/* Rows */}
+              <div className="divide-y divide-gray-50 dark:divide-slate-700/50">
+                {catRows.map((row) => (
+                  <AssetTableRow
+                    key={row.asset._id}
+                    row={row}
+                    isPendingOut={pendingOutIds.has(row.asset._id)}
+                    onTogglePendingOut={() => togglePendingOut(row.asset._id)}
+                    onToggleInline={() =>
+                      setRow(row.asset._id, { inlineOpen: !row.inlineOpen, noteOpen: false, returnCondition: "good", returnRemarks: "" })
+                    }
+                    onToggleNote={() =>
+                      setRow(row.asset._id, { noteOpen: !row.noteOpen })
+                    }
+                    onConditionChange={(c) =>
+                      setRow(row.asset._id, { returnCondition: c })
+                    }
+                    onRemarksChange={(r) =>
+                      setRow(row.asset._id, { returnRemarks: r })
+                    }
+                    onReturn={() => returnAsset(row)}
+                  />
+                ))}
+              </div>
             </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
-            <div className="flex gap-3 pt-1">
+// ─── AssetTableRow ────────────────────────────────────────────────────────────
+
+interface AssetTableRowProps {
+  row: AssetRow;
+  isPendingOut: boolean;
+  onTogglePendingOut: () => void;
+  onToggleInline: () => void;
+  onToggleNote: () => void;
+  onConditionChange: (c: ReturnCondition) => void;
+  onRemarksChange: (r: string) => void;
+  onReturn: () => void;
+}
+
+function AssetTableRow({
+  row,
+  isPendingOut,
+  onTogglePendingOut,
+  onToggleInline,
+  onToggleNote,
+  onConditionChange,
+  onRemarksChange,
+  onReturn,
+}: AssetTableRowProps) {
+  const { asset, movement, inlineOpen, noteOpen, returnCondition, returnRemarks, saving } = row;
+
+  const isAvailable = movement === null;
+  const isOut = movement?.status === "OUT";
+  const isIn = movement?.status === "IN";
+  const cond = movement?.condition as ReturnCondition | undefined;
+
+  return (
+    <div>
+      {/* Main row */}
+      <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center hover:bg-gray-50/50 dark:hover:bg-slate-700/20 transition-colors">
+        {/* Item name */}
+        <div className="px-4 py-3 min-w-0">
+          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{asset.name}</p>
+        </div>
+
+        {/* OUT column */}
+        <div className="px-3 py-3 w-14 flex justify-center">
+          {isAvailable ? (
+            <button
+              onClick={onTogglePendingOut}
+              title={isPendingOut ? "Remove from issue list" : "Add to issue list"}
+              className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors ${
+                isPendingOut
+                  ? "border-orange-400 bg-orange-50 dark:bg-orange-900/20"
+                  : "border-gray-300 dark:border-slate-500 hover:border-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/10"
+              }`}
+            >
+              {isPendingOut ? (
+                <CheckCircle2 className="w-4 h-4 text-orange-500" />
+              ) : (
+                <Circle className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
+              )}
+            </button>
+          ) : (
+            <CheckCircle2 className="w-6 h-6 text-orange-500" />
+          )}
+        </div>
+
+        {/* IN column */}
+        <div className="px-3 py-3 w-14 flex justify-center">
+          {isIn ? (
+            <CheckCircle2 className="w-6 h-6 text-green-500" />
+          ) : isOut ? (
+            <button
+              onClick={onToggleInline}
+              title="Mark as returned"
+              className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors ${
+                inlineOpen
+                  ? "border-green-500 bg-green-50 dark:bg-green-900/20"
+                  : "border-gray-300 dark:border-slate-500 hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/10"
+              }`}
+            >
+              {inlineOpen
+                ? <ChevronUp className="w-3.5 h-3.5 text-green-600" />
+                : <Circle className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />}
+            </button>
+          ) : (
+            <span className="text-gray-200 dark:text-slate-700 text-xs select-none">—</span>
+          )}
+        </div>
+
+        {/* Condition column */}
+        <div className="px-3 py-3 w-28 flex justify-center">
+          {isIn && cond ? (
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${conditionBadge[cond]}`}>
+              {conditionLabel[cond]}
+            </span>
+          ) : isOut ? (
+            <span className="text-xs text-gray-400 dark:text-slate-500">Pending</span>
+          ) : (
+            <span className="text-gray-200 dark:text-slate-700 text-xs select-none">—</span>
+          )}
+        </div>
+
+        {/* Remarks column */}
+        <div className="px-4 py-3 w-32">
+          {isIn && movement?.remarks ? (
+            <p className="text-xs text-gray-500 dark:text-slate-400 truncate" title={movement.remarks}>
+              {movement.remarks}
+            </p>
+          ) : (
+            <span className="text-gray-200 dark:text-slate-700 text-xs select-none">—</span>
+          )}
+        </div>
+      </div>
+
+      {/* Inline return panel */}
+      {inlineOpen && isOut && (
+        <div className="mx-4 mb-3 rounded-xl border border-green-200 dark:border-green-800/40 bg-green-50 dark:bg-green-900/10 overflow-hidden">
+          {/* Quick return row */}
+          <div className="flex items-center justify-between px-4 py-3 gap-3">
+            <p className="text-xs text-gray-600 dark:text-slate-300 font-medium truncate">
+              Return <span className="font-bold text-gray-900 dark:text-white">{asset.name}</span> as Good
+            </p>
+            <div className="flex items-center gap-2 flex-shrink-0">
               <button
-                type="button"
-                onClick={() => setReturnMovement(null)}
-                className="flex-1 py-2.5 border border-gray-200 dark:border-slate-600 dark:text-slate-300 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700"
+                onClick={onToggleNote}
+                className="text-xs text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 flex items-center gap-1 transition-colors"
               >
-                Cancel
+                {noteOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                {noteOpen ? "Hide note" : "Add note"}
               </button>
               <button
-                type="button"
-                onClick={handleReturn}
-                disabled={returning}
-                className="flex-1 py-2.5 bg-green-700 text-white text-sm font-medium rounded-xl hover:bg-green-800 disabled:opacity-60"
+                onClick={onReturn}
+                disabled={saving}
+                className="flex items-center gap-1.5 bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-green-800 disabled:opacity-60 transition-colors"
               >
-                {returning ? "Returning…" : "Confirm Return"}
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                {saving ? "Returning…" : "Confirm Return"}
               </button>
             </div>
           </div>
-        </Modal>
+
+          {/* Expandable note section */}
+          {noteOpen && (
+            <div className="px-4 pb-3 border-t border-green-200 dark:border-green-800/40 pt-3 space-y-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Condition</label>
+                  <select
+                    value={returnCondition}
+                    onChange={(e) => onConditionChange(e.target.value as ReturnCondition)}
+                    className="select text-sm"
+                  >
+                    <option value="good">Good — No issues</option>
+                    <option value="damaged">Damaged</option>
+                    <option value="defective">Defective / Malfunctioning</option>
+                    <option value="missing">Missing / Lost</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Remarks (optional)</label>
+                  <input
+                    value={returnRemarks}
+                    onChange={(e) => onRemarksChange(e.target.value)}
+                    placeholder="Notes…"
+                    className="input text-sm"
+                  />
+                </div>
+              </div>
+              {returnCondition !== "good" && (
+                <div className="flex items-start gap-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-lg text-xs text-amber-800 dark:text-amber-300">
+                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                  <span>A damage report will be automatically created.</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

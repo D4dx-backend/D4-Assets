@@ -1,17 +1,21 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import toast from "react-hot-toast";
-import { Plus, Pencil, Trash2, CalendarDays, UserPlus, ArrowRight, Download } from "lucide-react";
+import { Plus, Pencil, Trash2, CalendarDays, UserPlus, ArrowRight, Download, FileSpreadsheet, FileText, Search, X } from "lucide-react";
 import Link from "next/link";
 import { exportToCSV, exportToExcel, exportToPDF } from "@/lib/exportUtils";
 import PageHeader from "@/components/PageHeader";
+import SearchInput from "@/components/SearchInput";
 import Modal from "@/components/Modal";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
 import Badge from "@/components/Badge";
+import Pagination from "@/components/Pagination";
 import { format } from "date-fns";
 import { useSession } from "next-auth/react";
 
@@ -24,6 +28,9 @@ interface Event {
   toDate: string;
   status: "upcoming" | "active" | "completed";
   responsiblePerson: Person;
+  outCount: number;
+  inCount: number;
+  totalAssets: number;
 }
 
 const schema = z.object({
@@ -44,18 +51,25 @@ const statusVariants: Record<string, "blue" | "green" | "gray"> = {
 };
 
 export default function EventsPage() {
+  const router = useRouter();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "admin";
 
   const [events, setEvents] = useState<Event[]>([]);
   const [persons, setPersons] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1, limit: 10 });
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Event | null>(null);
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [quickName, setQuickName] = useState("");
   const [quickPhone, setQuickPhone] = useState("");
   const [addingPerson, setAddingPerson] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "upcoming" | "active" | "completed">("all");
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const {
     register,
@@ -67,22 +81,32 @@ export default function EventsPage() {
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
+    const params = new URLSearchParams({ page: String(page), limit: "10" });
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (search) params.set("search", search);
     const [evRes, pRes] = await Promise.all([
-      fetch("/api/events"),
-      fetch("/api/persons"),
+      fetch(`/api/events?${params.toString()}`),
+      fetch("/api/persons?all=true"),
     ]);
     const [evData, pData] = await Promise.all([evRes.json(), pRes.json()]) as [
-      { success: boolean; data: Event[] },
+      { success: boolean; data: Event[]; pagination: { total: number; totalPages: number; limit: number } },
       { success: boolean; data: Person[] }
     ];
-    if (evData.success) setEvents(evData.data);
+    if (evData.success) {
+      setEvents(evData.data);
+      setPagination(evData.pagination);
+    }
     if (pData.success) setPersons(pData.data);
     setLoading(false);
-  }, []);
+  }, [search, statusFilter, page]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  useEffect(() => { setPage(1); }, [search, statusFilter]);
+
   const today = format(new Date(), "yyyy-MM-dd");
+
+  // filtering is now server-side — no local events needed
 
   function openCreate() {
     setEditing(null);
@@ -139,23 +163,84 @@ export default function EventsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    const result = await res.json() as { success: boolean; error?: string };
+    const result = await res.json() as { success: boolean; data?: { _id: string }; error?: string };
     if (result.success) {
-      toast.success(editing ? "Event updated" : "Event created");
-      setShowModal(false);
-      fetchAll();
+      if (!editing && result.data?._id) {
+        toast.success("Event created");
+        router.push(`/events/${result.data._id}`);
+      } else {
+        toast.success("Event updated");
+        setShowModal(false);
+        fetchAll();
+      }
     } else {
       toast.error(result.error ?? "Something went wrong");
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this event?")) return;
-    const res = await fetch(`/api/events/${id}`, { method: "DELETE" });
-    const data = await res.json() as { success: boolean };
+  async function downloadEventReport(ev: Event, type: "excel" | "pdf") {
+    const res = await fetch(`/api/movements?event=${ev._id}&limit=100`);
+    const data = await res.json() as {
+      success: boolean;
+      data: Array<{
+        asset: { name: string; category: string };
+        allocatedPerson: { name: string };
+        status: "OUT" | "IN";
+        outDate: string;
+        inDate?: string;
+        condition?: string;
+        returnBy?: string;
+        verifiedBy?: string;
+        damageReason?: string;
+        remarks?: string;
+      }>;
+    };
+    if (!data.success) { toast.error("Could not load movements"); return; }
+    if (data.data.length === 0) { toast.error("No movements to export for this event"); return; }
+    const rows = data.data.map((m) => ({
+      "Event": ev.name,
+      "Event Location": ev.location,
+      "Asset": m.asset?.name ?? "",
+      "Category": m.asset?.category ?? "",
+      "Issued To": m.allocatedPerson?.name ?? "",
+      "Status": m.status === "OUT" ? "Issued (Not Returned)" : "Returned",
+      "Issued On": m.outDate ? format(new Date(m.outDate), "dd MMM yyyy HH:mm") : "",
+      "Returned On": m.inDate ? format(new Date(m.inDate), "dd MMM yyyy HH:mm") : "—",
+      "Condition on Return": m.inDate ? (m.condition ?? "good") : "—",
+      "Returned By": m.returnBy ?? "—",
+      "Verified By": m.verifiedBy ?? "—",
+      "Damage Reason": m.damageReason ?? "—",
+      "Remarks": m.remarks ?? "—",
+    }));
+    const filename = `event-${ev.name.toLowerCase().replace(/\s+/g, "-")}`;
+    if (type === "excel") exportToExcel(rows, filename);
+    else exportToPDF(rows, `${ev.name} — Movement Report`, filename);
+  }
+
+  function askDelete(ev: Event) {
+    if (ev.status === "completed") {
+      toast.error("Cannot delete a completed event");
+      return;
+    }
+    if (ev.outCount > 0) {
+      toast.error("Cannot delete an event with assets still issued");
+      return;
+    }
+    setDeleteConfirm({ id: ev._id, name: ev.name });
+  }
+
+  async function confirmDelete() {
+    if (!deleteConfirm) return;
+    setDeleting(true);
+    const res = await fetch(`/api/events/${deleteConfirm.id}`, { method: "DELETE" });
+    const data = await res.json() as { success: boolean; error?: string };
+    setDeleting(false);
+    setDeleteConfirm(null);
     if (data.success) {
       toast.success("Event deleted");
       fetchAll();
+    } else {
+      toast.error(data.error ?? "Failed to delete");
     }
   }
 
@@ -167,9 +252,9 @@ export default function EventsPage() {
         action={
           <div className="flex items-center gap-2">
             <div className="flex gap-1">
-              <button onClick={() => exportToCSV(events.map(e => ({ Name: e.name, Location: e.location, From: e.fromDate?.slice(0,10) ?? "", To: e.toDate?.slice(0,10) ?? "", Status: e.status, Person: e.responsiblePerson?.name ?? "" })), "events")} title="CSV" className="p-2 text-gray-500 dark:text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg border border-gray-200 dark:border-slate-600"><Download className="w-4 h-4" /></button>
-              <button onClick={() => exportToExcel(events.map(e => ({ Name: e.name, Location: e.location, From: e.fromDate?.slice(0,10) ?? "", To: e.toDate?.slice(0,10) ?? "", Status: e.status, Person: e.responsiblePerson?.name ?? "" })), "events")} title="Excel" className="p-2 text-gray-500 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold">XLS</button>
-              <button onClick={() => exportToPDF(events.map(e => ({ Name: e.name, Location: e.location, From: e.fromDate?.slice(0,10) ?? "", To: e.toDate?.slice(0,10) ?? "", Status: e.status, Person: e.responsiblePerson?.name ?? "" })), "Events List", "events")} title="PDF" className="p-2 text-gray-500 dark:text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold">PDF</button>
+              <button onClick={() => exportToCSV(events.map(e => ({ Name: e.name, Location: e.location, From: e.fromDate?.slice(0,10) ?? "", To: e.toDate?.slice(0,10) ?? "", Status: e.status, "Assets Out": e.outCount, "Assets Returned": e.inCount, Person: e.responsiblePerson?.name ?? "" })), "events")} title="CSV" className="p-2 text-gray-500 dark:text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg border border-gray-200 dark:border-slate-600"><Download className="w-4 h-4" /></button>
+              <button onClick={() => exportToExcel(events.map(e => ({ Name: e.name, Location: e.location, From: e.fromDate?.slice(0,10) ?? "", To: e.toDate?.slice(0,10) ?? "", Status: e.status, "Assets Out": e.outCount, "Assets Returned": e.inCount, Person: e.responsiblePerson?.name ?? "" })), "events")} title="Excel" className="p-2 text-gray-500 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold">XLS</button>
+              <button onClick={() => exportToPDF(events.map(e => ({ Name: e.name, Location: e.location, From: e.fromDate?.slice(0,10) ?? "", To: e.toDate?.slice(0,10) ?? "", Status: e.status, "Assets Out": e.outCount, "Assets Returned": e.inCount, Person: e.responsiblePerson?.name ?? "" })), "Events List", "events")} title="PDF" className="p-2 text-gray-500 dark:text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold">PDF</button>
             </div>
             <button
               onClick={openCreate}
@@ -185,47 +270,117 @@ export default function EventsPage() {
         <div className="space-y-3">
           {[1, 2, 3].map((i) => <div key={i} className="bg-white dark:bg-slate-800 rounded-xl h-24 animate-pulse border border-gray-100 dark:border-slate-700" />)}
         </div>
-      ) : events.length === 0 ? (
-        <EmptyState icon={CalendarDays} title="No events yet" description="Create your first event or program" />
       ) : (
-        <div className="space-y-3">
-          {events.map((ev) => (
-            <div key={ev._id} className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-medium text-gray-900 dark:text-white text-sm">{ev.name}</h3>
-                    <Badge variant={statusVariants[ev.status] ?? "gray"}>{ev.status}</Badge>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">📍 {ev.location}</p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-                    {format(new Date(ev.fromDate), "dd MMM yyyy")} – {format(new Date(ev.toDate), "dd MMM yyyy")}
-                  </p>
-                  {ev.responsiblePerson && (
-                    <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">👤 {ev.responsiblePerson.name}</p>
-                  )}
-                  <Link
-                    href={`/events/${ev._id}`}
-                    className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 mt-1.5 font-medium"
-                  >
-                    Manage Assets <ArrowRight className="w-3 h-3" />
-                  </Link>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => openEdit(ev)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  {isAdmin && (
-                    <button onClick={() => handleDelete(ev._id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
+        <>
+          {/* Search + Filter */}
+          <div className="flex flex-col sm:flex-row gap-2 mb-4">
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              suggestions={events.map((e) => e.name)}
+              placeholder="Search events by name or location…"
+              showClear
+              className="flex-1"
+            />
+            <div className="flex gap-1">
+              {(["all", "upcoming", "active", "completed"] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setStatusFilter(s)}
+                  className={`px-3 py-2 text-xs font-medium rounded-xl border transition-colors capitalize ${
+                    statusFilter === s
+                      ? "bg-blue-700 text-white border-blue-700"
+                      : "bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700"
+                  }`}
+                >
+                  {s === "all" ? "All" : s}
+                </button>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+
+          {events.length === 0 ? (
+            <EmptyState icon={CalendarDays} title="No events found" description={search || statusFilter !== "all" ? "Try adjusting your search or filter" : "Create your first event or program"} />
+          ) : (
+            <div className="space-y-3">
+              {events.map((ev) => (
+                <div key={ev._id} className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-slate-700">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-medium text-gray-900 dark:text-white text-sm">{ev.name}</h3>
+                        <Badge variant={statusVariants[ev.status] ?? "gray"}>{ev.status}</Badge>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">📍 {ev.location}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                        {format(new Date(ev.fromDate), "dd MMM yyyy")} – {format(new Date(ev.toDate), "dd MMM yyyy")}
+                      </p>
+                      {ev.responsiblePerson && (
+                        <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">👤 {ev.responsiblePerson.name}</p>
+                      )}
+                      {/* Asset counts */}
+                      {ev.totalAssets > 0 && (
+                        <div className="flex items-center gap-3 mt-2">
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                            ↑ {ev.outCount} Out
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                            ↓ {ev.inCount} Returned
+                          </span>
+                          <span className="text-xs text-gray-400 dark:text-slate-500">{ev.totalAssets} total</span>
+                          {ev.status === "completed" && ev.outCount === 0 && ev.totalAssets > 0 && (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300">
+                              ✓ All Returned
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <Link
+                        href={`/events/${ev._id}`}
+                        className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 mt-1.5 font-medium"
+                      >
+                        Manage Assets <ArrowRight className="w-3 h-3" />
+                      </Link>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => downloadEventReport(ev, "excel")}
+                        title="Download Excel"
+                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                      >
+                        <FileSpreadsheet className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => downloadEventReport(ev, "pdf")}
+                        title="Download PDF with items"
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                      >
+                        <FileText className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => openEdit(ev)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      {isAdmin && (
+                        <button onClick={() => askDelete(ev)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
+
+      <Pagination
+        page={page}
+        totalPages={pagination.totalPages}
+        total={pagination.total}
+        limit={pagination.limit}
+        onPageChange={setPage}
+      />
 
       {showModal && (
         <Modal title={editing ? "Edit Event" : "Add Event"} onClose={() => { setShowModal(false); setShowAddPerson(false); }}>
@@ -303,6 +458,16 @@ export default function EventsPage() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {deleteConfirm && (
+        <ConfirmDialog
+          title="Delete Event"
+          message={`Are you sure you want to delete "${deleteConfirm.name}"? This action cannot be undone.`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteConfirm(null)}
+          loading={deleting}
+        />
       )}
     </div>
   );

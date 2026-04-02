@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import { Plus, Pencil, Trash2, Tag } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import Modal from "@/components/Modal";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
 import { useSession } from "next-auth/react";
 
@@ -25,6 +26,8 @@ export default function CategoriesPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } =
     useForm<CategoryForm>({ resolver: zodResolver(schema) });
@@ -60,11 +63,19 @@ export default function CategoriesPage() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this category?")) return;
-    const res = await fetch(`/api/categories/${id}`, { method: "DELETE" });
-    const data = await res.json() as { success: boolean };
-    if (data.success) { toast.success("Deleted"); fetchCategories(); }
+  function handleDelete(c: Category) {
+    setDeleteConfirm({ id: c._id, name: c.name });
+  }
+
+  async function confirmDelete() {
+    if (!deleteConfirm) return;
+    setDeleting(true);
+    const res = await fetch(`/api/categories/${deleteConfirm.id}`, { method: "DELETE" });
+    const data = await res.json() as { success: boolean; error?: string };
+    setDeleting(false);
+    setDeleteConfirm(null);
+    if (data.success) { toast.success("Category deleted"); fetchCategories(); }
+    else toast.error(data.error ?? "Failed to delete");
   }
 
   return (
@@ -93,7 +104,7 @@ export default function CategoriesPage() {
               </div>
               <div className="flex gap-1">
                 <button onClick={() => openEdit(c)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
-                <button onClick={() => handleDelete(c._id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                <button onClick={() => handleDelete(c)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
               </div>
             </div>
           ))}
@@ -120,6 +131,16 @@ export default function CategoriesPage() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {deleteConfirm && (
+        <ConfirmDialog
+          title="Delete Category"
+          message={`Are you sure you want to delete "${deleteConfirm.name}"? This action cannot be undone.`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteConfirm(null)}
+          loading={deleting}
+        />
       )}
     </div>
   );

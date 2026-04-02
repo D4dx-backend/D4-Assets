@@ -32,7 +32,8 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   const asset = await Asset.findById(id);
   if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
 
-  const allowed = ["name", "category", "dateOfPurchase", "warrantyDetails", "warrantyExpiryDate", "billUrl", "billPublicId"];
+  const allowed = ["name", "category", "dateOfPurchase", "noWarranty", "warrantyDetails", "warrantyExpiryDate", "billUrl", "billPublicId"];
+  const noWarranty = body["noWarranty"] === true;
   for (const key of allowed) {
     if (key in body) {
       if ((key === "dateOfPurchase" || key === "warrantyExpiryDate") && body[key]) {
@@ -41,6 +42,11 @@ export async function PATCH(req: Request, { params }: RouteParams) {
         (asset as unknown as Record<string, unknown>)[key] = body[key];
       }
     }
+  }
+  // When marked as no-warranty, clear warranty fields
+  if (noWarranty) {
+    asset.warrantyDetails = "";
+    asset.warrantyExpiryDate = undefined;
   }
 
   await asset.save();

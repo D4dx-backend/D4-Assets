@@ -5,23 +5,24 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import toast from "react-hot-toast";
-import { Plus, ArrowLeftRight, ArrowUpRight, ArrowDownLeft, AlertCircle, Download } from "lucide-react";
+import { ArrowLeftRight, ArrowDownLeft, AlertCircle, Download, FileSpreadsheet, FileText } from "lucide-react";
 import { exportToCSV, exportToExcel, exportToPDF } from "@/lib/exportUtils";
 import PageHeader from "@/components/PageHeader";
 import Modal from "@/components/Modal";
 import EmptyState from "@/components/EmptyState";
 import Badge from "@/components/Badge";
+import Pagination from "@/components/Pagination";
 import { format } from "date-fns";
 
-interface Asset { _id: string; name: string; category: string }
-interface Event { _id: string; name: string; location: string }
-interface Person { _id: string; name: string }
+interface MvAsset { _id: string; name: string; category: string }
+interface MvEvent { _id: string; name: string; location: string }
+interface MvPerson { _id: string; name: string }
 
 interface Movement {
   _id: string;
-  asset: Asset;
-  event: Event;
-  allocatedPerson: Person;
+  asset: MvAsset;
+  event: MvEvent;
+  allocatedPerson: MvPerson;
   status: "OUT" | "IN";
   outDate: string;
   inDate?: string;
@@ -29,15 +30,8 @@ interface Movement {
   returnBy?: string;
   verifiedBy?: string;
   damageReason?: string;
+  remarks?: string;
 }
-
-const outSchema = z.object({
-  asset: z.string().min(1, "Asset required"),
-  event: z.string().min(1, "Event required"),
-  allocatedPerson: z.string().min(1, "Person required"),
-  outDate: z.string().min(1, "Date required"),
-  remarks: z.string().optional(),
-});
 
 const inSchema = z.object({
   returnBy: z.string().min(1, "Return by is required"),
@@ -47,59 +41,36 @@ const inSchema = z.object({
   remarks: z.string().optional(),
 });
 
-type OutForm = z.infer<typeof outSchema>;
 type InForm = z.infer<typeof inSchema>;
 
 export default function MovementsPage() {
   const [movements, setMovements] = useState<Movement[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [events, setEvents] = useState<Event[]>([]);
-  const [persons, setPersons] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState<"" | "OUT" | "IN">("");
-  const [showOutModal, setShowOutModal] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<"" | "OUT" | "IN">("")
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1, limit: 10 });
   const [showInModal, setShowInModal] = useState(false);
   const [selectedMovement, setSelectedMovement] = useState<Movement | null>(null);
 
-  const outForm = useForm<OutForm>({ resolver: zodResolver(outSchema), defaultValues: { outDate: new Date().toISOString().slice(0, 10) } });
   const inForm = useForm<InForm>({ resolver: zodResolver(inSchema), defaultValues: { condition: "good" } });
 
   const watchCondition = inForm.watch("condition");
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
-    const params = filterStatus ? `?status=${filterStatus}` : "";
-    const [mRes, aRes, eRes, pRes] = await Promise.all([
-      fetch(`/api/movements${params}`),
-      fetch("/api/assets"),
-      fetch("/api/events"),
-      fetch("/api/persons"),
-    ]);
-    const [mData, aData, eData, pData] = await Promise.all([mRes.json(), aRes.json(), eRes.json(), pRes.json()]) as [
-      { success: boolean; data: Movement[] },
-      { success: boolean; data: Asset[] },
-      { success: boolean; data: Event[] },
-      { success: boolean; data: Person[] },
-    ];
-    if (mData.success) setMovements(mData.data);
-    if (aData.success) setAssets(aData.data);
-    if (eData.success) setEvents(eData.data);
-    if (pData.success) setPersons(pData.data);
+    const params = new URLSearchParams({ page: String(page), limit: "10" });
+    if (filterStatus) params.set("status", filterStatus);
+    const mRes = await fetch(`/api/movements?${params.toString()}`);
+    const mData = await mRes.json() as { success: boolean; data: Movement[]; pagination: { total: number; totalPages: number; limit: number } };
+    if (mData.success) {
+      setMovements(mData.data);
+      setPagination(mData.pagination);
+    }
     setLoading(false);
-  }, [filterStatus]);
+  }, [filterStatus, page]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
-
-  async function onOutSubmit(data: OutForm) {
-    const res = await fetch("/api/movements", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const result = await res.json() as { success: boolean; error?: string };
-    if (result.success) { toast.success("Asset checked out"); setShowOutModal(false); outForm.reset(); fetchAll(); }
-    else toast.error(result.error ?? "Error");
-  }
+  useEffect(() => { setPage(1); }, [filterStatus]);
 
   async function onInSubmit(data: InForm) {
     if (!selectedMovement) return;
@@ -120,6 +91,24 @@ export default function MovementsPage() {
     }
   }
 
+  function movementRow(m: Movement) {
+    return {
+      "Event": m.event?.name ?? "",
+      "Event Location": m.event?.location ?? "",
+      "Asset": m.asset?.name ?? "",
+      "Category": m.asset?.category ?? "",
+      "Issued To": m.allocatedPerson?.name ?? "",
+      "Status": m.status === "OUT" ? "Issued (Not Returned)" : "Returned",
+      "Issued On": m.outDate ? format(new Date(m.outDate), "dd MMM yyyy HH:mm") : "",
+      "Returned On": m.inDate ? format(new Date(m.inDate), "dd MMM yyyy HH:mm") : "—",
+      "Condition on Return": m.inDate ? (m.condition ?? "good") : "—",
+      "Returned By": m.returnBy ?? "—",
+      "Verified By": m.verifiedBy ?? "—",
+      "Damage Reason": m.damageReason ?? "—",
+      "Remarks": m.remarks ?? "—",
+    };
+  }
+
   function openReturn(m: Movement) {
     setSelectedMovement(m);
     inForm.reset({ condition: "good" });
@@ -130,20 +119,12 @@ export default function MovementsPage() {
     <div>
       <PageHeader
         title="Movement Register"
-        description="Track asset check-out and check-in"
+        description="Global movement log — issue assets from the event page"
         action={
-          <div className="flex items-center gap-2">
-            <div className="flex gap-1">
-              <button onClick={() => exportToCSV(movements.map(m => ({ Asset: m.asset?.name ?? "", Event: m.event?.name ?? "", Person: m.allocatedPerson?.name ?? "", Status: m.status, "Out Date": m.outDate?.slice(0,10) ?? "", "In Date": m.inDate?.slice(0,10) ?? "", Condition: m.condition ?? "" })), "movements")} title="CSV" className="p-2 text-gray-500 dark:text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg border border-gray-200 dark:border-slate-600"><Download className="w-4 h-4" /></button>
-              <button onClick={() => exportToExcel(movements.map(m => ({ Asset: m.asset?.name ?? "", Event: m.event?.name ?? "", Person: m.allocatedPerson?.name ?? "", Status: m.status, "Out Date": m.outDate?.slice(0,10) ?? "", "In Date": m.inDate?.slice(0,10) ?? "", Condition: m.condition ?? "" })), "movements")} title="Excel" className="p-2 text-gray-500 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold">XLS</button>
-              <button onClick={() => exportToPDF(movements.map(m => ({ Asset: m.asset?.name ?? "", Event: m.event?.name ?? "", Person: m.allocatedPerson?.name ?? "", Status: m.status, "Out Date": m.outDate?.slice(0,10) ?? "", Condition: m.condition ?? "" })), "Movement Register", "movements")} title="PDF" className="p-2 text-gray-500 dark:text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold">PDF</button>
-            </div>
-            <button
-              onClick={() => { outForm.reset({ outDate: new Date().toISOString().slice(0, 10) }); setShowOutModal(true); }}
-              className="flex items-center gap-2 bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-800"
-            >
-              <Plus className="w-4 h-4" /> Check Out
-            </button>
+          <div className="flex gap-1">
+            <button onClick={() => exportToCSV(movements.map(m => ({ Asset: m.asset?.name ?? "", Event: m.event?.name ?? "", Person: m.allocatedPerson?.name ?? "", Status: m.status, "Out Date": m.outDate?.slice(0,10) ?? "", "In Date": m.inDate?.slice(0,10) ?? "", Condition: m.condition ?? "" })), "movements")} title="CSV" className="p-2 text-gray-500 dark:text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg border border-gray-200 dark:border-slate-600"><Download className="w-4 h-4" /></button>
+            <button onClick={() => exportToExcel(movements.map(m => ({ Asset: m.asset?.name ?? "", Event: m.event?.name ?? "", Person: m.allocatedPerson?.name ?? "", Status: m.status, "Out Date": m.outDate?.slice(0,10) ?? "", "In Date": m.inDate?.slice(0,10) ?? "", Condition: m.condition ?? "" })), "movements")} title="Excel" className="p-2 text-gray-500 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold">XLS</button>
+            <button onClick={() => exportToPDF(movements.map(m => ({ Asset: m.asset?.name ?? "", Event: m.event?.name ?? "", Person: m.allocatedPerson?.name ?? "", Status: m.status, "Out Date": m.outDate?.slice(0,10) ?? "", Condition: m.condition ?? "" })), "Movement Register", "movements")} title="PDF" className="p-2 text-gray-500 dark:text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold">PDF</button>
           </div>
         }
       />
@@ -185,58 +166,43 @@ export default function MovementsPage() {
                     {m.inDate && ` · IN: ${format(new Date(m.inDate), "dd MMM yyyy HH:mm")}`}
                   </p>
                 </div>
-                {m.status === "OUT" && (
+                <div className="flex items-center gap-1 flex-shrink-0">
                   <button
-                    onClick={() => openReturn(m)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 text-xs font-medium rounded-lg hover:bg-green-100"
+                    onClick={() => exportToExcel([movementRow(m)], `movement-${m._id}`)}
+                    title="Download Excel"
+                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                   >
-                    <ArrowDownLeft className="w-3.5 h-3.5" /> Return
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
                   </button>
-                )}
+                  <button
+                    onClick={() => exportToPDF([movementRow(m)], `${m.asset?.name ?? "Asset"} — Movement`, `movement-${m._id}`)}
+                    title="Download PDF"
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                  </button>
+                  {m.status === "OUT" && (
+                    <button
+                      onClick={() => openReturn(m)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 text-xs font-medium rounded-lg hover:bg-green-100 ml-1"
+                    >
+                      <ArrowDownLeft className="w-3.5 h-3.5" /> Return
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Check Out Modal */}
-      {showOutModal && (
-        <Modal title="Check Out Asset" onClose={() => setShowOutModal(false)}>
-          <form onSubmit={outForm.handleSubmit(onOutSubmit)} className="space-y-4">
-            <Field label="Asset" error={outForm.formState.errors.asset?.message}>
-              <select {...outForm.register("asset")} className="select">
-                <option value="">Select asset…</option>
-                {assets.map(a => <option key={a._id} value={a._id}>{a.name} ({a.category})</option>)}
-              </select>
-            </Field>
-            <Field label="Event" error={outForm.formState.errors.event?.message}>
-              <select {...outForm.register("event")} className="select">
-                <option value="">Select event…</option>
-                {events.map(e => <option key={e._id} value={e._id}>{e.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Allocated Person" error={outForm.formState.errors.allocatedPerson?.message}>
-              <select {...outForm.register("allocatedPerson")} className="select">
-                <option value="">Select person…</option>
-                {persons.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Out Date" error={outForm.formState.errors.outDate?.message}>
-              <input type="date" {...outForm.register("outDate")} className="input" />
-            </Field>
-            <Field label="Remarks">
-              <textarea {...outForm.register("remarks")} className="input resize-none" rows={2} placeholder="Optional notes…" />
-            </Field>
-            <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => setShowOutModal(false)} className="flex-1 py-2.5 border border-gray-200 dark:border-slate-600 dark:text-slate-300 text-sm font-medium rounded-xl">Cancel</button>
-              <button type="submit" disabled={outForm.formState.isSubmitting} className="flex-1 py-2.5 bg-blue-700 text-white text-sm font-medium rounded-xl disabled:opacity-60 flex items-center justify-center gap-2">
-                <ArrowUpRight className="w-4 h-4" />
-                {outForm.formState.isSubmitting ? "Saving…" : "Check Out"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
+      <Pagination
+        page={page}
+        totalPages={pagination.totalPages}
+        total={pagination.total}
+        limit={pagination.limit}
+        onPageChange={setPage}
+      />
 
       {/* Check In Modal */}
       {showInModal && selectedMovement && (

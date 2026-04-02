@@ -9,6 +9,7 @@ import mongoose from "mongoose";
 import * as dotenv from "dotenv";
 
 dotenv.config({ path: ".env.local" });
+dotenv.config({ path: ".env" }); // fallback
 
 const UserSchema = new mongoose.Schema({
   name: String,

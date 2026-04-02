@@ -27,5 +27,8 @@ const EventSchema = new Schema<IEvent>(
   { timestamps: true }
 );
 
+EventSchema.index({ isActive: 1, status: 1, fromDate: -1 });
+EventSchema.index({ name: "text", location: "text" });
+
 const Event: Model<IEvent> = models.Event ?? mongoose.model<IEvent>("Event", EventSchema);
 export default Event;

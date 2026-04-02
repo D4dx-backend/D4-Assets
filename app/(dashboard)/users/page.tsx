@@ -5,12 +5,12 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import toast from "react-hot-toast";
-import { Plus, Pencil, Trash2, Users, Shield, Download } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, Shield, Download, PowerOff, Power } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import Modal from "@/components/Modal";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
-import Badge from "@/components/Badge";
-import { useSession } from "next-auth/react";
+import Badge from "@/components/Badge";import Pagination from "@/components/Pagination";import { useSession } from "next-auth/react";
 import { exportToCSV, exportToExcel, exportToPDF } from "@/lib/exportUtils";
 
 interface Permissions {
@@ -79,8 +79,14 @@ export default function UsersPage() {
   const { data: session } = useSession();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1, limit: 10 });
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deactivateConfirm, setDeactivateConfirm] = useState<{ id: string; name: string; isActive: boolean } | null>(null);
+  const [deactivating, setDeactivating] = useState(false);
 
   const { register, handleSubmit, reset, watch, setValue, formState: { errors, isSubmitting } } = useForm<UserForm>({
     resolver: zodResolver(schema),
@@ -90,11 +96,14 @@ export default function UsersPage() {
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
-    const res = await fetch("/api/users");
-    const data = await res.json() as { success: boolean; data: User[] };
-    if (data.success) setUsers(data.data);
+    const res = await fetch(`/api/users?page=${page}&limit=10`);
+    const data = await res.json() as { success: boolean; data: User[]; pagination: { total: number; totalPages: number; limit: number } };
+    if (data.success) {
+      setUsers(data.data);
+      setPagination(data.pagination);
+    }
     setLoading(false);
-  }, []);
+  }, [page]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
@@ -143,11 +152,38 @@ export default function UsersPage() {
     else toast.error(result.error ?? "Error");
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Deactivate this user?")) return;
-    const res = await fetch(`/api/users/${id}`, { method: "DELETE" });
-    const data = await res.json() as { success: boolean };
-    if (data.success) { toast.success("User deactivated"); fetchUsers(); }
+  function handleDelete(u: User) {
+    setDeleteConfirm({ id: u._id, name: u.name });
+  }
+
+  function handleDeactivate(u: User) {
+    setDeactivateConfirm({ id: u._id, name: u.name, isActive: u.isActive });
+  }
+
+  async function confirmDeactivate() {
+    if (!deactivateConfirm) return;
+    setDeactivating(true);
+    const res = await fetch(`/api/users/${deactivateConfirm.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: !deactivateConfirm.isActive }),
+    });
+    const data = await res.json() as { success: boolean; error?: string };
+    setDeactivating(false);
+    setDeactivateConfirm(null);
+    if (data.success) { toast.success(deactivateConfirm.isActive ? "User deactivated" : "User reactivated"); fetchUsers(); }
+    else toast.error(data.error ?? "Failed");
+  }
+
+  async function confirmDelete() {
+    if (!deleteConfirm) return;
+    setDeleting(true);
+    const res = await fetch(`/api/users/${deleteConfirm.id}`, { method: "DELETE" });
+    const data = await res.json() as { success: boolean; error?: string };
+    setDeleting(false);
+    setDeleteConfirm(null);
+    if (data.success) { toast.success("User deleted"); fetchUsers(); }
+    else toast.error(data.error ?? "Failed");
   }
 
   function getExportRows() {
@@ -213,9 +249,22 @@ export default function UsersPage() {
                   </div>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
-                  <button onClick={() => openEdit(u)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
+                  <button onClick={() => openEdit(u)} title="Edit" className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"><Pencil className="w-4 h-4" /></button>
                   {u._id !== session?.user?.id && (
-                    <button onClick={() => handleDelete(u._id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                    <>
+                      <button
+                        onClick={() => handleDeactivate(u)}
+                        title={u.isActive ? "Deactivate" : "Reactivate"}
+                        className={`p-2 rounded-lg transition-colors ${
+                          u.isActive
+                            ? "text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                            : "text-amber-500 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                        }`}
+                      >
+                        {u.isActive ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
+                      </button>
+                      <button onClick={() => handleDelete(u)} title="Delete" className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
+                    </>
                   )}
                 </div>
               </div>
@@ -223,6 +272,14 @@ export default function UsersPage() {
           ))}
         </div>
       )}
+
+      <Pagination
+        page={page}
+        totalPages={pagination.totalPages}
+        total={pagination.total}
+        limit={pagination.limit}
+        onPageChange={setPage}
+      />
 
       {showModal && (
         <Modal title={editing ? "Edit User" : "Add User"} onClose={() => setShowModal(false)}>
@@ -266,6 +323,33 @@ export default function UsersPage() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {deactivateConfirm && (
+        <ConfirmDialog
+          title={deactivateConfirm.isActive ? "Deactivate User" : "Reactivate User"}
+          message={
+            deactivateConfirm.isActive
+              ? `Deactivate "${deactivateConfirm.name}"? They will lose access to the system but their data will be kept.`
+              : `Reactivate "${deactivateConfirm.name}"? They will regain access to the system.`
+          }
+          confirmLabel={deactivateConfirm.isActive ? "Deactivate" : "Reactivate"}
+          variant={deactivateConfirm.isActive ? "warning" : "success"}
+          onConfirm={confirmDeactivate}
+          onCancel={() => setDeactivateConfirm(null)}
+          loading={deactivating}
+        />
+      )}
+
+      {deleteConfirm && (
+        <ConfirmDialog
+          title="Delete User"
+          message={`Are you sure you want to permanently delete "${deleteConfirm.name}"? This action cannot be undone.`}
+          confirmLabel="Delete"
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteConfirm(null)}
+          loading={deleting}
+        />
       )}
     </div>
   );
