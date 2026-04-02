@@ -196,6 +196,13 @@ export default function SettingsPage() {
           <span className="text-sm font-semibold text-gray-700 dark:text-slate-300">Change MPIN</span>
         </div>
 
+        {session?.user?.id === "env-admin" ? (
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+            This account&apos;s MPIN is managed via environment variables.
+            Update <code className="font-mono font-semibold">ADMIN_MPIN</code> in your <code className="font-mono font-semibold">.env</code> file to change it.
+          </div>
+        ) : (
+          <>
         {/* Step indicator */}
         <div className="flex items-center justify-center gap-2 mb-4">
           {(["current", "new", "confirm"] as const).map((s, i) => (
@@ -237,6 +244,8 @@ export default function SettingsPage() {
         >
           Reset
         </button>
+          </>
+        )}
       </div>
     </div>
   );
