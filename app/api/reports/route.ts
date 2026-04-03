@@ -5,6 +5,7 @@ import Movement from "@/lib/models/Movement";
 import DamageReport from "@/lib/models/DamageReport";
 import ActivityLog from "@/lib/models/ActivityLog";
 import Asset from "@/lib/models/Asset";
+import mongoose from "mongoose";
 // These imports ensure Mongoose registers the schemas used in populate()
 import "@/lib/models/Event";
 import "@/lib/models/Person";
@@ -19,6 +20,7 @@ export async function GET(req: Request) {
   const from = searchParams.get("from");
   const to = searchParams.get("to");
   const assetName = (searchParams.get("assetName") ?? "").trim().slice(0, 100);
+  const assetId = (searchParams.get("assetId") ?? "").trim();
   const status = searchParams.get("status");
   const search = (searchParams.get("search") ?? "").trim().slice(0, 100);
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
@@ -35,7 +37,9 @@ export async function GET(req: Request) {
         ...(to && { $lte: new Date(new Date(to).setHours(23, 59, 59, 999)) }),
       };
     }
-    if (assetName) {
+    if (assetId && mongoose.isValidObjectId(assetId)) {
+      query.asset = new mongoose.Types.ObjectId(assetId);
+    } else if (assetName) {
       const assets = await Asset.find({ name: { $regex: assetName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } }).select("_id").lean();
       query.asset = { $in: assets.map((a) => a._id) };
     }

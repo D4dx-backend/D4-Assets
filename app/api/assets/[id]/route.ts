@@ -43,10 +43,11 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       }
     }
   }
-  // When marked as no-warranty, clear warranty fields
+  // When marked as no-warranty, clear warranty fields and purchase date
   if (noWarranty) {
     asset.warrantyDetails = "";
     asset.warrantyExpiryDate = undefined;
+    asset.dateOfPurchase = undefined as unknown as Date;
   }
 
   await asset.save();

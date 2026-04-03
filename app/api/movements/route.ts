@@ -67,10 +67,12 @@ export async function POST(req: Request) {
     event: string;
     allocatedPerson: string;
     outDate?: string;
+    condition?: "good" | "damaged" | "defective" | "missing";
+    damageReason?: string;
     remarks?: string;
   };
 
-  const { asset, event, allocatedPerson } = body;
+  const { asset, event, allocatedPerson, condition, damageReason } = body;
   if (!asset || !event || !allocatedPerson) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
@@ -106,9 +108,28 @@ export async function POST(req: Request) {
       outDate: body.outDate ? new Date(body.outDate) : new Date(),
       outBy: resolveOid(session.user.id),
       status: "OUT",
+      condition: condition ?? "good",
+      damageReason: damageReason,
       remarks: body.remarks,
       createdBy: resolveOid(session.user.id),
     });
+
+    if (condition && condition !== "good") {
+      const conditionToType: Record<string, "damage" | "defect" | "missing"> = {
+        damaged: "damage",
+        defective: "defect",
+        missing: "missing",
+      };
+      const reportType = conditionToType[condition] ?? "damage";
+      await DamageReport.create({
+        movement: movement._id,
+        asset: movement.asset,
+        event: movement.event,
+        type: reportType,
+        reason: damageReason ?? "No reason provided",
+        reportedBy: resolveOid(session.user.id),
+      });
+    }
 
     await logActivity({
       userId: session.user.id,

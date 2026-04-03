@@ -53,6 +53,7 @@ export default function AvailabilityPage() {
       setSearched(false);
       return;
     }
+    setResults([]);
     setLoading(true);
     const res = await fetch(`/api/assets/availability?search=${encodeURIComponent(query.trim())}`);
     const data = await res.json() as { success: boolean; data: AvailabilityResult[] };
@@ -87,7 +88,6 @@ export default function AvailabilityPage() {
         onChange={setSearch}
         suggestions={assetSuggestions}
         placeholder="Type asset name to check availability…"
-        loading={loading}
         showClear
         className="mb-6"
         inputClassName="py-3 pl-10 shadow-sm bg-white dark:bg-slate-800"
@@ -105,6 +105,30 @@ export default function AvailabilityPage() {
             <XCircle className="w-3.5 h-3.5" />
             {unavailable.length} Currently Issued
           </div>
+        </div>
+      )}
+
+      {/* Page-level loading skeleton */}
+      {loading && (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden animate-pulse">
+              <div className="px-4 py-2 bg-gray-50 dark:bg-slate-700/50 h-8" />
+              <div className="p-4 space-y-3">
+                <div className="flex justify-between">
+                  <div className="space-y-1.5">
+                    <div className="h-4 w-36 bg-gray-200 dark:bg-slate-600 rounded" />
+                    <div className="h-3 w-24 bg-gray-100 dark:bg-slate-700 rounded" />
+                  </div>
+                  <div className="h-6 w-16 bg-gray-200 dark:bg-slate-600 rounded-full" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="h-3 w-full bg-gray-100 dark:bg-slate-700 rounded" />
+                  <div className="h-3 w-full bg-gray-100 dark:bg-slate-700 rounded" />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

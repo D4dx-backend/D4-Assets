@@ -4,7 +4,7 @@ export interface IAsset extends Document {
   name: string;
   productCode?: string;
   category: string;
-  dateOfPurchase: Date;
+  dateOfPurchase?: Date;
   noWarranty: boolean;
   warrantyDetails: string;
   warrantyExpiryDate?: Date;
@@ -22,7 +22,7 @@ const AssetSchema = new Schema<IAsset>(
     name: { type: String, required: true, trim: true },
     productCode: { type: String, trim: true },
     category: { type: String, required: true, trim: true },
-    dateOfPurchase: { type: Date, required: true },
+    dateOfPurchase: { type: Date },
     noWarranty: { type: Boolean, default: false },
     warrantyDetails: { type: String, default: "" },
     warrantyExpiryDate: { type: Date },

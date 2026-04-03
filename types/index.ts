@@ -11,7 +11,7 @@ export interface AssetFormData {
   name: string;
   productCode?: string;
   category: string;
-  dateOfPurchase: string;
+  dateOfPurchase?: string;
   warrantyDetails: string;
   warrantyExpiryDate?: string;
   allowOutside?: boolean;
@@ -38,12 +38,14 @@ export interface MovementOutFormData {
   event: string;
   allocatedPerson: string;
   outDate: string;
+  condition?: "good" | "damaged" | "defective" | "missing";
+  damageReason?: string;
   remarks?: string;
 }
 
 export interface MovementInFormData {
-  returnBy: string;
-  verifiedBy: string;
+  returnBy?: string;
+  verifiedBy?: string;
   condition: "good" | "damaged" | "defective" | "missing";
   damageReason?: string;
   remarks?: string;

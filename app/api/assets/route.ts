@@ -60,7 +60,7 @@ export async function POST(req: Request) {
 
   const { name, productCode, category, dateOfPurchase, noWarranty, warrantyDetails, warrantyExpiryDate, billUrl, billPublicId, allowOutside } = body;
 
-  if (!name || !category || !dateOfPurchase) {
+  if (!name || !category || (!noWarranty && !dateOfPurchase)) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
       name,
       productCode: productCode?.trim() || undefined,
       category,
-      dateOfPurchase: new Date(dateOfPurchase),
+      dateOfPurchase: dateOfPurchase ? new Date(dateOfPurchase) : undefined,
       noWarranty: noWarranty ?? false,
       warrantyDetails: noWarranty ? "" : (warrantyDetails ?? ""),
       warrantyExpiryDate: noWarranty ? undefined : (warrantyExpiryDate ? new Date(warrantyExpiryDate) : undefined),

@@ -1,12 +1,17 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { BarChart3, Download, AlertTriangle, ArrowLeftRight, History, Search, X } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import toast from "react-hot-toast";
+import { BarChart3, Download, AlertTriangle, ArrowLeftRight, History, Search, X, Pencil, CheckCircle } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import SearchInput from "@/components/SearchInput";
 import Badge from "@/components/Badge";
 import EmptyState from "@/components/EmptyState";
 import Pagination from "@/components/Pagination";
+import Modal from "@/components/Modal";
 import { format } from "date-fns";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -36,8 +41,19 @@ interface DamageReport {
   reason: string;
   reportedBy: { name: string };
   isResolved: boolean;
+  resolvedAt?: string;
+  resolvedBy?: { name: string };
+  notes?: string;
   createdAt: string;
 }
+
+const damageEditSchema = z.object({
+  type: z.enum(["damage", "defect", "missing"]),
+  reason: z.string().min(1, "Reason is required"),
+  notes: z.string().optional(),
+  isResolved: z.boolean(),
+});
+type DamageEditForm = z.infer<typeof damageEditSchema>;
 
 interface ActivityLog {
   _id: string;
@@ -59,6 +75,22 @@ export default function ReportsPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1, limit: 10 });
+  const [editingReport, setEditingReport] = useState<DamageReport | null>(null);
+
+  const editForm = useForm<DamageEditForm>({
+    resolver: zodResolver(damageEditSchema),
+    defaultValues: { type: "damage", reason: "", notes: "", isResolved: false },
+  });
+
+  function openEditModal(report: DamageReport) {
+    editForm.reset({
+      type: report.type as "damage" | "defect" | "missing",
+      reason: report.reason,
+      notes: report.notes ?? "",
+      isResolved: report.isResolved,
+    });
+    setEditingReport(report);
+  }
 
   const fetchReport = useCallback(async () => {
     setLoading(true);
@@ -76,6 +108,38 @@ export default function ReportsPage() {
     }
     setLoading(false);
   }, [reportType, fromDate, toDate, assetName, statusFilter, search, page]);
+
+  async function onEditSubmit(formData: DamageEditForm) {
+    if (!editingReport) return;
+    const res = await fetch(`/api/reports/${editingReport._id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(formData),
+    });
+    const result = await res.json() as { success: boolean; error?: string };
+    if (result.success) {
+      toast.success("Report updated");
+      setEditingReport(null);
+      fetchReport();
+    } else {
+      toast.error(result.error ?? "Failed to update report");
+    }
+  }
+
+  async function quickResolve(report: DamageReport) {
+    const res = await fetch(`/api/reports/${report._id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isResolved: !report.isResolved }),
+    });
+    const result = await res.json() as { success: boolean; error?: string };
+    if (result.success) {
+      toast.success(report.isResolved ? "Marked as open" : "Marked as resolved");
+      fetchReport();
+    } else {
+      toast.error(result.error ?? "Failed");
+    }
+  }
 
   useEffect(() => { fetchReport(); }, [fetchReport]);
 
@@ -334,7 +398,7 @@ export default function ReportsPage() {
       ) : reportType === "movement" ? (
         <MovementReport data={data as Movement[]} />
       ) : reportType === "damage" ? (
-        <DamageReport data={data as DamageReport[]} />
+        <DamageReport data={data as DamageReport[]} onEdit={openEditModal} onResolve={quickResolve} />
       ) : (
         <ActivityReport data={data as ActivityLog[]} />
       )}
@@ -346,6 +410,81 @@ export default function ReportsPage() {
         limit={pagination.limit}
         onPageChange={setPage}
       />
+
+      {/* ── Edit Damage Report Modal ── */}
+      {!!editingReport && (
+      <Modal
+        onClose={() => setEditingReport(null)}
+        title="Edit Damage Report"
+      >
+        {editingReport && (
+          <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
+            <p className="text-sm text-gray-500 dark:text-slate-400">
+              <span className="font-medium text-gray-900 dark:text-white">{editingReport.asset?.name}</span>
+              {" · "}{editingReport.event?.name}
+            </p>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Type</label>
+              <select {...editForm.register("type")} className="input w-full">
+                <option value="damage">Damage</option>
+                <option value="defect">Defect</option>
+                <option value="missing">Missing</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Reason</label>
+              <textarea
+                {...editForm.register("reason")}
+                rows={3}
+                className="input w-full"
+                placeholder="Describe the damage / defect…"
+              />
+              {editForm.formState.errors.reason && (
+                <p className="text-xs text-red-500 mt-1">{editForm.formState.errors.reason.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Notes (optional)</label>
+              <textarea
+                {...editForm.register("notes")}
+                rows={2}
+                className="input w-full"
+                placeholder="Internal notes…"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                {...editForm.register("isResolved")}
+                className="w-4 h-4 rounded accent-green-600"
+              />
+              <span className="text-sm text-gray-700 dark:text-slate-300">Mark as Resolved</span>
+            </label>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingReport(null)}
+                className="px-4 py-2 text-sm rounded-xl border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={editForm.formState.isSubmitting}
+                className="px-4 py-2 text-sm rounded-xl bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-60"
+              >
+                {editForm.formState.isSubmitting ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+      )}
     </div>
   );
 }
@@ -421,7 +560,15 @@ function MovementReport({ data }: { data: Movement[] }) {
 }
 
 /* ── Damage Report ── */
-function DamageReport({ data }: { data: DamageReport[] }) {
+function DamageReport({
+  data,
+  onEdit,
+  onResolve,
+}: {
+  data: DamageReport[];
+  onEdit: (r: DamageReport) => void;
+  onResolve: (r: DamageReport) => void;
+}) {
   return (
     <>
       {/* Desktop table */}
@@ -436,6 +583,7 @@ function DamageReport({ data }: { data: DamageReport[] }) {
               <th className="px-4 py-3 text-left">Reported By</th>
               <th className="px-4 py-3 text-left">Date</th>
               <th className="px-4 py-3 text-left">Status</th>
+              <th className="px-4 py-3 text-left">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
@@ -452,6 +600,24 @@ function DamageReport({ data }: { data: DamageReport[] }) {
                 <td className="px-4 py-3">
                   <Badge variant={d.isResolved ? "green" : "red"}>{d.isResolved ? "Resolved" : "Open"}</Badge>
                 </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => onEdit(d)}
+                      title="Edit report"
+                      className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => onResolve(d)}
+                      title={d.isResolved ? "Re-open" : "Mark resolved"}
+                      className={`p-1 rounded ${d.isResolved ? "text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20" : "text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"}`}
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -462,15 +628,27 @@ function DamageReport({ data }: { data: DamageReport[] }) {
       <div className="md:hidden space-y-3">
         {data.map((d) => (
           <div key={d._id} className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-red-100 dark:border-red-900/40">
-            <div className="flex items-center justify-between mb-1">
-              <span className="font-medium text-sm text-gray-900 dark:text-white">{d.asset?.name}</span>
-              <Badge variant={d.isResolved ? "green" : "red"}>{d.isResolved ? "Resolved" : "Open"}</Badge>
+            <div className="flex items-start justify-between mb-1">
+              <div>
+                <span className="font-medium text-sm text-gray-900 dark:text-white">{d.asset?.name}</span>
+                <p className="text-xs text-gray-500 dark:text-slate-400">{d.event?.name}</p>
+                <p className="text-xs font-medium text-red-700 dark:text-red-400 mt-1 capitalize">{d.type}: {d.reason}</p>
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
+                  Reported by {d.reportedBy?.name} · {format(new Date(d.createdAt), "dd MMM yyyy")}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <Badge variant={d.isResolved ? "green" : "red"}>{d.isResolved ? "Resolved" : "Open"}</Badge>
+                <div className="flex gap-1 mt-1">
+                  <button onClick={() => onEdit(d)} className="p-1 text-gray-400 hover:text-blue-600 rounded">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => onResolve(d)} className={`p-1 rounded ${d.isResolved ? "text-gray-400 hover:text-orange-500" : "text-gray-400 hover:text-green-600"}`}>
+                    <CheckCircle className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
-            <p className="text-xs text-gray-500 dark:text-slate-400">{d.event?.name}</p>
-            <p className="text-xs font-medium text-red-700 dark:text-red-400 mt-1 capitalize">{d.type}: {d.reason}</p>
-            <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
-              Reported by {d.reportedBy?.name} · {format(new Date(d.createdAt), "dd MMM yyyy")}
-            </p>
           </div>
         ))}
       </div>

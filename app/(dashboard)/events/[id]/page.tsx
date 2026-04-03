@@ -14,6 +14,7 @@ import {
   Package,
   Search,
   SendHorizonal,
+  X,
 } from "lucide-react";
 import Badge from "@/components/Badge";
 import SearchInput from "@/components/SearchInput";
@@ -45,7 +46,10 @@ interface Movement {
   event: { _id: string; name: string };
   status: "OUT" | "IN";
   outDate: string;
+  outBy?: { _id: string; name: string };
   inDate?: string;
+  returnBy?: string;
+  verifiedBy?: string;
   condition?: "good" | "damaged" | "defective" | "missing";
   remarks?: string;
   allocatedPerson?: { _id: string; name: string };
@@ -61,6 +65,8 @@ interface AssetRow {
   noteOpen: boolean;
   returnCondition: ReturnCondition;
   returnRemarks: string;
+  returnBy: string;
+  returnVerifiedBy: string;
   saving: boolean;
 }
 
@@ -98,6 +104,10 @@ export default function EventDetailPage() {
   // Batch OUT local state
   const [pendingOutIds, setPendingOutIds] = useState<Set<string>>(new Set());
   const [submittingOut, setSubmittingOut] = useState(false);
+  // OUT confirm step
+  type OutAssetCondition = { condition: ReturnCondition; damageReason: string };
+  const [showOutConfirm, setShowOutConfirm] = useState(false);
+  const [outAssetConditions, setOutAssetConditions] = useState<Record<string, OutAssetCondition>>({});
 
   // Search
   const [search, setSearch] = useState("");
@@ -130,6 +140,8 @@ export default function EventDetailPage() {
           noteOpen: false,
           returnCondition: "good",
           returnRemarks: "",
+          returnBy: "",
+          returnVerifiedBy: "",
           saving: false,
         }))
       );
@@ -158,27 +170,32 @@ export default function EventDetailPage() {
     });
   }, []);
 
-  async function submitPendingOut() {
+  async function submitOutWithConditions() {
     if (pendingOutIds.size === 0) return;
     setSubmittingOut(true);
     const results = await Promise.all(
-      [...pendingOutIds].map((assetId) =>
-        fetch("/api/movements", {
+      [...pendingOutIds].map((assetId) => {
+        const condData = outAssetConditions[assetId] ?? { condition: "good" as ReturnCondition, damageReason: "" };
+        return fetch("/api/movements", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             asset: assetId,
             event: id,
             allocatedPerson: event?.responsiblePerson?._id,
+            condition: condData.condition,
+            damageReason: condData.damageReason || undefined,
           }),
-        }).then((r) => r.json() as Promise<{ success: boolean; error?: string }>)
-      )
+        }).then((r) => r.json() as Promise<{ success: boolean; error?: string }>);
+      })
     );
     setSubmittingOut(false);
     const failed = results.filter((r) => !r.success).length;
     if (failed > 0) toast.error(`${failed} asset(s) could not be issued`);
     else toast.success(`${pendingOutIds.size} asset(s) issued`);
     setPendingOutIds(new Set());
+    setShowOutConfirm(false);
+    setOutAssetConditions({});
     fetchAll();
   }
 
@@ -193,6 +210,8 @@ export default function EventDetailPage() {
       body: JSON.stringify({
         condition: row.returnCondition,
         remarks: row.returnRemarks || undefined,
+        returnBy: row.returnBy || undefined,
+        verifiedBy: row.returnVerifiedBy || undefined,
       }),
     });
     const data = await res.json() as { success: boolean; error?: string };
@@ -317,15 +336,102 @@ export default function EventDetailPage() {
         />
         {pendingOutIds.size > 0 && (
           <button
-            onClick={submitPendingOut}
-            disabled={submittingOut}
-            className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-60 whitespace-nowrap transition-colors"
+            onClick={() => { setOutAssetConditions({}); setShowOutConfirm(true); }}
+            className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors"
           >
             <SendHorizonal className="w-4 h-4" />
-            {submittingOut ? "Issuing…" : `Issue ${pendingOutIds.size} item${pendingOutIds.size > 1 ? "s" : ""}`}
+            {`Issue ${pendingOutIds.size} item${pendingOutIds.size > 1 ? "s" : ""}`}
           </button>
         )}
       </div>
+
+      {/* ── OUT confirm modal ────────────────────────────────────────────── */}
+      {showOutConfirm && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700">
+              <h2 className="text-base font-bold text-gray-900 dark:text-white">
+                Issue {pendingOutIds.size} item{pendingOutIds.size !== 1 ? "s" : ""}
+              </h2>
+              <button
+                onClick={() => setShowOutConfirm(false)}
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4 text-gray-600 dark:text-slate-400" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto divide-y divide-gray-100 dark:divide-slate-700/50">
+              {[...pendingOutIds].map((assetId) => {
+                const assetName = rows.find((r) => r.asset._id === assetId)?.asset.name ?? assetId;
+                const cond = outAssetConditions[assetId] ?? { condition: "good" as ReturnCondition, damageReason: "" };
+                return (
+                  <div key={assetId} className="px-4 py-3 space-y-2">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{assetName}</p>
+                    <div className="flex gap-3">
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">Condition at checkout</label>
+                        <select
+                          value={cond.condition}
+                          onChange={(e) =>
+                            setOutAssetConditions((prev) => ({
+                              ...prev,
+                              [assetId]: { ...cond, condition: e.target.value as ReturnCondition },
+                            }))
+                          }
+                          className="select text-sm"
+                        >
+                          <option value="good">Good</option>
+                          <option value="damaged">Damaged</option>
+                          <option value="defective">Defective</option>
+                          <option value="missing">Missing</option>
+                        </select>
+                      </div>
+                      {cond.condition !== "good" && (
+                        <div className="flex-1">
+                          <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">Reason</label>
+                          <input
+                            value={cond.damageReason}
+                            onChange={(e) =>
+                              setOutAssetConditions((prev) => ({
+                                ...prev,
+                                [assetId]: { ...cond, damageReason: e.target.value },
+                              }))
+                            }
+                            placeholder="Describe issue…"
+                            className="input text-sm"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    {cond.condition !== "good" && (
+                      <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>A damage report will be created on issue.</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="p-4 border-t border-gray-100 dark:border-slate-700 flex justify-end gap-2">
+              <button
+                onClick={() => setShowOutConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitOutWithConditions}
+                disabled={submittingOut}
+                className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-60 transition-colors"
+              >
+                <SendHorizonal className="w-4 h-4" />
+                {submittingOut ? "Issuing…" : "Confirm & Issue"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Category-grouped table ────────────────────────────────────────── */}
       {rows.length === 0 ? (
@@ -392,7 +498,7 @@ function AssetTableRow({
   togglePendingOut,
   returnAsset,
 }: AssetTableRowProps) {
-  const { asset, movement, inlineOpen, noteOpen, returnCondition, returnRemarks, saving } = row;
+  const { asset, movement, inlineOpen, noteOpen, returnCondition, returnRemarks, returnBy, returnVerifiedBy, saving } = row;
 
   const isAvailable = movement === null;
   const isOut = movement?.status === "OUT";
@@ -404,6 +510,8 @@ function AssetTableRow({
   const handleToggleNote = useCallback(() => setRow(asset._id, { noteOpen: !noteOpen }), [setRow, asset._id, noteOpen]);
   const handleConditionChange = useCallback((c: ReturnCondition) => setRow(asset._id, { returnCondition: c }), [setRow, asset._id]);
   const handleRemarksChange = useCallback((r: string) => setRow(asset._id, { returnRemarks: r }), [setRow, asset._id]);
+  const handleReturnByChange = useCallback((v: string) => setRow(asset._id, { returnBy: v }), [setRow, asset._id]);
+  const handleReturnVerifiedByChange = useCallback((v: string) => setRow(asset._id, { returnVerifiedBy: v }), [setRow, asset._id]);
   const handleReturn = useCallback(() => returnAsset(row), [returnAsset, row]);
 
   return (
@@ -418,6 +526,22 @@ function AssetTableRow({
           )}
           {!asset.allowOutside && (
             <p className="text-xs text-amber-600 dark:text-amber-400">Not allowed outside</p>
+          )}
+          {isOut && movement?.outBy?.name && (
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Issued by: {movement.outBy.name}</p>
+          )}
+          {isIn && (
+            <div className="mt-0.5 space-y-0.5">
+              {movement?.outBy?.name && (
+                <p className="text-xs text-blue-500/70 dark:text-blue-400/60">Issued by: {movement.outBy.name}</p>
+              )}
+              {movement?.returnBy && (
+                <p className="text-xs text-green-600 dark:text-green-400">Ret. by: {movement.returnBy}</p>
+              )}
+              {movement?.verifiedBy && (
+                <p className="text-xs text-teal-600 dark:text-teal-400">Ver. by: {movement.verifiedBy}</p>
+              )}
+            </div>
           )}
         </div>
 
@@ -504,7 +628,7 @@ function AssetTableRow({
           {/* Quick return row */}
           <div className="flex items-center justify-between px-4 py-3 gap-3">
             <p className="text-xs text-gray-600 dark:text-slate-300 font-medium truncate">
-              Return <span className="font-bold text-gray-900 dark:text-white">{asset.name}</span> as Good
+              Return <span className="font-bold text-gray-900 dark:text-white">{asset.name}</span>
             </p>
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
@@ -527,7 +651,27 @@ function AssetTableRow({
 
           {/* Expandable note section */}
           {noteOpen && (
-            <div className="px-4 pb-3 border-t border-green-200 dark:border-green-800/40 pt-3 space-y-2">
+            <div className="px-4 pb-3 border-t border-green-200 dark:border-green-800/40 pt-3 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Returned By</label>
+                  <input
+                    value={returnBy}
+                    onChange={(e) => handleReturnByChange(e.target.value)}
+                    placeholder="Person who returned…"
+                    className="input text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Verified By</label>
+                  <input
+                    value={returnVerifiedBy}
+                    onChange={(e) => handleReturnVerifiedByChange(e.target.value)}
+                    placeholder="Person who verified…"
+                    className="input text-sm"
+                  />
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Condition</label>

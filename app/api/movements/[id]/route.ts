@@ -4,6 +4,12 @@ import { connectDB } from "@/lib/mongodb";
 import Movement from "@/lib/models/Movement";
 import DamageReport from "@/lib/models/DamageReport";
 import { logActivity } from "@/lib/activityLogger";
+import mongoose from "mongoose";
+
+const SYSTEM_ADMIN_OID = new mongoose.Types.ObjectId("000000000000000000000000");
+function resolveOid(id: string) {
+  return mongoose.isValidObjectId(id) ? id : SYSTEM_ADMIN_OID;
+}
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -57,13 +63,19 @@ export async function PATCH(req: Request, { params }: RouteParams) {
 
   // Auto-create damage report if condition is not good
   if (body.condition && body.condition !== "good") {
+    const conditionToType: Record<string, "damage" | "defect" | "missing"> = {
+      damaged: "damage",
+      defective: "defect",
+      missing: "missing",
+    };
+    const reportType = conditionToType[body.condition] ?? "damage";
     await DamageReport.create({
       movement: movement._id,
       asset: movement.asset,
       event: movement.event,
-      type: body.condition as "damage" | "defect" | "missing",
+      type: reportType,
       reason: body.damageReason ?? "No reason provided",
-      reportedBy: session.user.id,
+      reportedBy: resolveOid(session.user.id),
     });
   }
 

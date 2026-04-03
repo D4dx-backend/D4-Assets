@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import toast from "react-hot-toast";
-import { Plus, Pencil, Trash2, Search, Package, FileText, Download } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Package, FileText, Download, AlertTriangle, CheckCircle } from "lucide-react";
 import { exportToCSV, exportToExcel, exportToPDF } from "@/lib/exportUtils";
 import PageHeader from "@/components/PageHeader";
 import SearchInput from "@/components/SearchInput";
@@ -22,7 +22,7 @@ interface Asset {
   name: string;
   productCode?: string;
   category: string;
-  dateOfPurchase: string;
+  dateOfPurchase?: string;
   noWarranty: boolean;
   warrantyDetails: string;
   warrantyExpiryDate?: string;
@@ -39,14 +39,42 @@ const assetSchema = z.object({
   name: z.string().min(1, "Asset name is required"),
   productCode: z.string().optional(),
   category: z.string().min(1, "Category is required"),
-  dateOfPurchase: z.string().min(1, "Date of purchase is required"),
+  dateOfPurchase: z.string().optional(),
   noWarranty: z.boolean().optional(),
   warrantyDetails: z.string().optional(),
   warrantyExpiryDate: z.string().optional(),
   allowOutside: z.boolean().optional(),
+}).superRefine((val, ctx) => {
+  if (!val.noWarranty && !val.dateOfPurchase) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Date of purchase is required",
+      path: ["dateOfPurchase"],
+    });
+  }
 });
 
 type AssetForm = z.infer<typeof assetSchema>;
+
+interface AssetDamageReport {
+  _id: string;
+  asset: { name: string; category: string };
+  event: { name: string };
+  type: string;
+  reason: string;
+  reportedBy: { name: string };
+  isResolved: boolean;
+  notes?: string;
+  createdAt: string;
+}
+
+const damageEditSchema = z.object({
+  type: z.enum(["damage", "defect", "missing"]),
+  reason: z.string().min(1, "Reason is required"),
+  notes: z.string().optional(),
+  isResolved: z.boolean(),
+});
+type DamageEditForm = z.infer<typeof damageEditSchema>;
 
 export default function AssetsPage() {
   const { data: session } = useSession();
@@ -63,6 +91,17 @@ export default function AssetsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Damage reports
+  const [damageAsset, setDamageAsset] = useState<Asset | null>(null);
+  const [assetReports, setAssetReports] = useState<AssetDamageReport[]>([]);
+  const [loadingReports, setLoadingReports] = useState(false);
+  const [editingReport, setEditingReport] = useState<AssetDamageReport | null>(null);
+
+  const damageEditForm = useForm<DamageEditForm>({
+    resolver: zodResolver(damageEditSchema),
+    defaultValues: { type: "damage", reason: "", notes: "", isResolved: false },
+  });
 
   const {
     register,
@@ -129,7 +168,7 @@ export default function AssetsPage() {
       name: asset.name,
       productCode: asset.productCode ?? "",
       category: asset.category,
-      dateOfPurchase: asset.dateOfPurchase?.slice(0, 10),
+      dateOfPurchase: asset.dateOfPurchase?.slice(0, 10) ?? "",
       noWarranty: asset.noWarranty ?? false,
       warrantyDetails: asset.warrantyDetails,
       warrantyExpiryDate: asset.warrantyExpiryDate?.slice(0, 10) ?? "",
@@ -190,6 +229,58 @@ export default function AssetsPage() {
       fetchAssets();
     } else {
       toast.error(data.error ?? "Failed to delete");
+    }
+  }
+
+  async function openDamageReports(asset: Asset) {
+    setDamageAsset(asset);
+    setAssetReports([]);
+    setLoadingReports(true);
+    const res = await fetch(`/api/reports?type=damage&assetId=${asset._id}&limit=50`);
+    const d = await res.json() as { success: boolean; data: AssetDamageReport[] };
+    if (d.success) setAssetReports(d.data);
+    setLoadingReports(false);
+  }
+
+  function openReportEdit(report: AssetDamageReport) {
+    damageEditForm.reset({
+      type: report.type as "damage" | "defect" | "missing",
+      reason: report.reason,
+      notes: report.notes ?? "",
+      isResolved: report.isResolved,
+    });
+    setEditingReport(report);
+  }
+
+  async function onReportEditSubmit(formData: DamageEditForm) {
+    if (!editingReport) return;
+    const res = await fetch(`/api/reports/${editingReport._id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(formData),
+    });
+    const result = await res.json() as { success: boolean; data?: AssetDamageReport; error?: string };
+    if (result.success) {
+      toast.success("Report updated");
+      setEditingReport(null);
+      if (damageAsset) openDamageReports(damageAsset);
+    } else {
+      toast.error(result.error ?? "Failed");
+    }
+  }
+
+  async function quickResolveReport(report: AssetDamageReport) {
+    const res = await fetch(`/api/reports/${report._id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isResolved: !report.isResolved }),
+    });
+    const result = await res.json() as { success: boolean; error?: string };
+    if (result.success) {
+      toast.success(report.isResolved ? "Marked as open" : "Marked as resolved");
+      if (damageAsset) openDamageReports(damageAsset);
+    } else {
+      toast.error(result.error ?? "Failed");
     }
   }
 
@@ -273,7 +364,7 @@ export default function AssetsPage() {
                       <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5 font-mono">#{asset.productCode}</p>
                     )}
                     <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-                      Purchased: {format(new Date(asset.dateOfPurchase), "dd MMM yyyy")}
+                      Purchased: {asset.dateOfPurchase ? format(new Date(asset.dateOfPurchase), "dd MMM yyyy") : "Unknown"}
                     </p>
                     {!asset.noWarranty && asset.warrantyDetails && (
                       <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{asset.warrantyDetails}</p>
@@ -290,6 +381,13 @@ export default function AssetsPage() {
                         <FileText className="w-4 h-4" />
                       </a>
                     )}
+                    <button
+                      onClick={() => openDamageReports(asset)}
+                      title="View damage reports"
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                    >
+                      <AlertTriangle className="w-4 h-4" />
+                    </button>
                     <button
                       onClick={() => openEdit(asset)}
                       className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
@@ -346,7 +444,7 @@ export default function AssetsPage() {
               </select>
             </Field>
 
-            <Field label="Date of Purchase" error={errors.dateOfPurchase?.message}>
+            <Field label={`Date of Purchase${noWarranty ? " (optional)" : ""}`} error={errors.dateOfPurchase?.message}>
               <input type="date" {...register("dateOfPurchase")} className="input" />
             </Field>
 
@@ -361,6 +459,7 @@ export default function AssetsPage() {
                     if (e.target.checked) {
                       setValue("warrantyDetails", "");
                       setValue("warrantyExpiryDate", "");
+                      setValue("dateOfPurchase", "");
                     }
                   }}
                   className="sr-only peer"
@@ -434,6 +533,128 @@ export default function AssetsPage() {
           onCancel={() => setDeleteConfirm(null)}
           loading={deleting}
         />
+      )}
+
+      {/* ── Damage Reports Modal ── */}
+      {!!damageAsset && !editingReport && (
+      <Modal
+        onClose={() => setDamageAsset(null)}
+        title={`Damage Reports — ${damageAsset?.name ?? ""}`}
+      >
+        {loadingReports ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => <div key={i} className="h-14 bg-gray-100 dark:bg-slate-700 rounded-xl animate-pulse" />)}
+          </div>
+        ) : assetReports.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-slate-400 text-center py-6">No damage reports for this asset.</p>
+        ) : (
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            {assetReports.map((r) => (
+              <div key={r._id} className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-3 border border-gray-200 dark:border-slate-600">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-red-600 dark:text-red-400 capitalize">{r.type}</span>
+                      <Badge variant={r.isResolved ? "green" : "red"}>{r.isResolved ? "Resolved" : "Open"}</Badge>
+                    </div>
+                    <p className="text-xs text-gray-700 dark:text-slate-300 mt-1">{r.reason}</p>
+                    {r.notes && <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5 italic">{r.notes}</p>}
+                    <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
+                      {r.event?.name} · {r.reportedBy?.name} · {format(new Date(r.createdAt), "dd MMM yyyy")}
+                    </p>
+                  </div>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => openReportEdit(r)}
+                      title="Edit"
+                      className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => quickResolveReport(r)}
+                      title={r.isResolved ? "Re-open" : "Mark resolved"}
+                      className={`p-1 rounded ${r.isResolved ? "text-gray-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20" : "text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"}`}
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
+      )}
+
+      {/* ── Edit Damage Report Modal (from asset view) ── */}
+      {!!editingReport && (
+      <Modal
+        onClose={() => setEditingReport(null)}
+        title="Edit Damage Report"
+      >
+        {editingReport && (
+          <form onSubmit={damageEditForm.handleSubmit(onReportEditSubmit)} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Type</label>
+              <select {...damageEditForm.register("type")} className="input w-full">
+                <option value="damage">Damage</option>
+                <option value="defect">Defect</option>
+                <option value="missing">Missing</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Reason</label>
+              <textarea
+                {...damageEditForm.register("reason")}
+                rows={3}
+                className="input w-full"
+                placeholder="Describe the damage / defect…"
+              />
+              {damageEditForm.formState.errors.reason && (
+                <p className="text-xs text-red-500 mt-1">{damageEditForm.formState.errors.reason.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Notes (optional)</label>
+              <textarea
+                {...damageEditForm.register("notes")}
+                rows={2}
+                className="input w-full"
+                placeholder="Internal notes…"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                {...damageEditForm.register("isResolved")}
+                className="w-4 h-4 rounded accent-green-600"
+              />
+              <span className="text-sm text-gray-700 dark:text-slate-300">Mark as Resolved</span>
+            </label>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditingReport(null)}
+                className="px-4 py-2 text-sm rounded-xl border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
+              >
+                Back
+              </button>
+              <button
+                type="submit"
+                disabled={damageEditForm.formState.isSubmitting}
+                className="px-4 py-2 text-sm rounded-xl bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-60"
+              >
+                {damageEditForm.formState.isSubmitting ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
       )}
     </div>
   );
