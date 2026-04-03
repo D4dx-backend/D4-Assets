@@ -105,7 +105,7 @@ export default function EventDetailPage() {
   const [pendingOutIds, setPendingOutIds] = useState<Set<string>>(new Set());
   const [submittingOut, setSubmittingOut] = useState(false);
   // OUT confirm step
-  type OutAssetCondition = { condition: ReturnCondition; damageReason: string };
+  type OutAssetCondition = { condition: ReturnCondition; damageReason: string; remarks: string };
   const [showOutConfirm, setShowOutConfirm] = useState(false);
   const [outAssetConditions, setOutAssetConditions] = useState<Record<string, OutAssetCondition>>({});
 
@@ -175,7 +175,7 @@ export default function EventDetailPage() {
     setSubmittingOut(true);
     const results = await Promise.all(
       [...pendingOutIds].map((assetId) => {
-        const condData = outAssetConditions[assetId] ?? { condition: "good" as ReturnCondition, damageReason: "" };
+        const condData = outAssetConditions[assetId] ?? { condition: "good" as ReturnCondition, damageReason: "", remarks: "" };
         return fetch("/api/movements", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -185,6 +185,7 @@ export default function EventDetailPage() {
             allocatedPerson: event?.responsiblePerson?._id,
             condition: condData.condition,
             damageReason: condData.damageReason || undefined,
+            remarks: condData.remarks || undefined,
           }),
         }).then((r) => r.json() as Promise<{ success: boolean; error?: string }>);
       })
@@ -363,7 +364,7 @@ export default function EventDetailPage() {
             <div className="flex-1 overflow-y-auto divide-y divide-gray-100 dark:divide-slate-700/50">
               {[...pendingOutIds].map((assetId) => {
                 const assetName = rows.find((r) => r.asset._id === assetId)?.asset.name ?? assetId;
-                const cond = outAssetConditions[assetId] ?? { condition: "good" as ReturnCondition, damageReason: "" };
+                const cond = outAssetConditions[assetId] ?? { condition: "good" as ReturnCondition, damageReason: "", remarks: "" };
                 return (
                   <div key={assetId} className="px-4 py-3 space-y-2">
                     <p className="text-sm font-medium text-gray-900 dark:text-white">{assetName}</p>
@@ -402,6 +403,20 @@ export default function EventDetailPage() {
                           />
                         </div>
                       )}
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">Remark (optional)</label>
+                      <input
+                        value={cond.remarks}
+                        onChange={(e) =>
+                          setOutAssetConditions((prev) => ({
+                            ...prev,
+                            [assetId]: { ...cond, remarks: e.target.value },
+                          }))
+                        }
+                        placeholder="Pre-existing damage or notes…"
+                        className="input text-sm w-full"
+                      />
                     </div>
                     {cond.condition !== "good" && (
                       <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
@@ -612,7 +627,7 @@ function AssetTableRow({
 
         {/* Remarks column */}
         <div className="px-4 py-3 w-32">
-          {isIn && movement?.remarks ? (
+          {movement?.remarks ? (
             <p className="text-xs text-gray-500 dark:text-slate-400 truncate" title={movement.remarks}>
               {movement.remarks}
             </p>

@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import toast from "react-hot-toast";
-import { Plus, Pencil, Trash2, CalendarDays, UserPlus, ArrowRight, Download, FileSpreadsheet, FileText, Search, X } from "lucide-react";
+import { Plus, Pencil, Trash2, CalendarDays, UserPlus, ArrowRight, ArrowDownLeft, AlertCircle, Download, FileSpreadsheet, FileText, Search, X } from "lucide-react";
 import Link from "next/link";
 import { exportToCSV, exportToExcel, exportToPDF } from "@/lib/exportUtils";
 import PageHeader from "@/components/PageHeader";
@@ -32,6 +32,22 @@ interface Event {
   inCount: number;
   totalAssets: number;
 }
+
+interface OutMovement {
+  _id: string;
+  asset: { _id: string; name: string; category: string };
+  allocatedPerson?: { _id: string; name: string };
+  outDate: string;
+}
+
+const inSchema = z.object({
+  returnBy: z.string().min(1, "Return by is required"),
+  verifiedBy: z.string().min(1, "Verified by is required"),
+  condition: z.enum(["good", "damaged", "defective", "missing"]),
+  damageReason: z.string().optional(),
+  remarks: z.string().optional(),
+});
+type InForm = z.infer<typeof inSchema>;
 
 const schema = z.object({
   name: z.string().min(1, "Event name is required"),
@@ -70,6 +86,17 @@ export default function EventsPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "upcoming" | "active" | "completed">("all");
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Return modal state
+  const [showReturnPicker, setShowReturnPicker] = useState(false);
+  const [returnEventMovements, setReturnEventMovements] = useState<OutMovement[]>([]);
+  const [returnEventName, setReturnEventName] = useState("");
+  const [loadingReturnList, setLoadingReturnList] = useState(false);
+  const [showInModal, setShowInModal] = useState(false);
+  const [selectedMovementForReturn, setSelectedMovementForReturn] = useState<OutMovement | null>(null);
+
+  const inForm = useForm<InForm>({ resolver: zodResolver(inSchema), defaultValues: { condition: "good" } });
+  const watchCondition = inForm.watch("condition");
 
   const {
     register,
@@ -229,8 +256,43 @@ export default function EventsPage() {
     setDeleteConfirm({ id: ev._id, name: ev.name });
   }
 
-  async function confirmDelete() {
-    if (!deleteConfirm) return;
+  async function openReturnPicker(ev: Event) {
+    setReturnEventName(ev.name);
+    setLoadingReturnList(true);
+    setShowReturnPicker(true);
+    const res = await fetch(`/api/movements?event=${ev._id}&status=OUT&limit=100`);
+    const data = await res.json() as { success: boolean; data: OutMovement[] };
+    setReturnEventMovements(data.success ? data.data : []);
+    setLoadingReturnList(false);
+  }
+
+  function pickMovementToReturn(m: OutMovement) {
+    setSelectedMovementForReturn(m);
+    inForm.reset({ condition: "good" });
+    setShowReturnPicker(false);
+    setShowInModal(true);
+  }
+
+  async function onInSubmit(data: InForm) {
+    if (!selectedMovementForReturn) return;
+    const res = await fetch(`/api/movements/${selectedMovementForReturn._id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const result = await res.json() as { success: boolean; error?: string };
+    if (result.success) {
+      toast.success("Asset returned");
+      setShowInModal(false);
+      setSelectedMovementForReturn(null);
+      inForm.reset();
+      fetchAll();
+    } else {
+      toast.error(result.error ?? "Error");
+    }
+  }
+
+  async function confirmDelete() {    if (!deleteConfirm) return;
     setDeleting(true);
     const res = await fetch(`/api/events/${deleteConfirm.id}`, { method: "DELETE" });
     const data = await res.json() as { success: boolean; error?: string };
@@ -343,6 +405,14 @@ export default function EventsPage() {
                       </Link>
                     </div>
                     <div className="flex items-center gap-1">
+                      {ev.outCount > 0 && (
+                        <button
+                          onClick={() => openReturnPicker(ev)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 text-xs font-medium rounded-lg hover:bg-green-100 mr-1"
+                        >
+                          <ArrowDownLeft className="w-3.5 h-3.5" /> Return
+                        </button>
+                      )}
                       <button
                         onClick={() => downloadEventReport(ev, "excel")}
                         title="Download Excel"
@@ -468,6 +538,82 @@ export default function EventsPage() {
           onCancel={() => setDeleteConfirm(null)}
           loading={deleting}
         />
+      )}
+
+      {/* Step 1 — Pick which OUT asset to return */}
+      {showReturnPicker && (
+        <Modal title={`Return Asset — ${returnEventName}`} onClose={() => setShowReturnPicker(false)}>
+          {loadingReturnList ? (
+            <div className="space-y-2">
+              {[1,2,3].map(i => <div key={i} className="h-12 bg-gray-100 dark:bg-slate-700 rounded-xl animate-pulse" />)}
+            </div>
+          ) : returnEventMovements.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-slate-400 text-center py-6">No assets currently out for this event.</p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">Select an asset to return:</p>
+              {returnEventMovements.map((m) => (
+                <button
+                  key={m._id}
+                  onClick={() => pickMovementToReturn(m)}
+                  className="w-full text-left p-3 bg-gray-50 dark:bg-slate-700 rounded-xl hover:bg-green-50 dark:hover:bg-green-900/20 border border-gray-200 dark:border-slate-600 hover:border-green-300 transition-colors"
+                >
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{m.asset?.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                    {m.asset?.category} · Issued to: {m.allocatedPerson?.name ?? "—"} · Out: {m.outDate ? format(new Date(m.outDate), "dd MMM yyyy HH:mm") : "—"}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {/* Step 2 — Return form */}
+      {showInModal && selectedMovementForReturn && (
+        <Modal title="Return Asset" onClose={() => { setShowInModal(false); setSelectedMovementForReturn(null); }}>
+          <div className="mb-4 p-3 bg-gray-50 dark:bg-slate-700 rounded-xl text-sm">
+            <p className="font-medium dark:text-white">{selectedMovementForReturn.asset?.name}</p>
+            <p className="text-gray-500 dark:text-slate-400 text-xs">{returnEventName} · {selectedMovementForReturn.allocatedPerson?.name ?? "—"}</p>
+          </div>
+          <form onSubmit={inForm.handleSubmit(onInSubmit)} className="space-y-4">
+            <Field label="Return By" error={inForm.formState.errors.returnBy?.message}>
+              <input {...inForm.register("returnBy")} className="input" placeholder="Name of person returning" />
+            </Field>
+            <Field label="Verified By" error={inForm.formState.errors.verifiedBy?.message}>
+              <input {...inForm.register("verifiedBy")} className="input" placeholder="Name of verifier" />
+            </Field>
+            <Field label="Condition" error={inForm.formState.errors.condition?.message}>
+              <select {...inForm.register("condition")} className="select">
+                <option value="good">Good</option>
+                <option value="damaged">Damaged</option>
+                <option value="defective">Defective</option>
+                <option value="missing">Missing</option>
+              </select>
+            </Field>
+            {watchCondition !== "good" && (
+              <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertCircle className="w-4 h-4 text-red-500" />
+                  <p className="text-xs font-medium text-red-700">This will create a damage/defect report</p>
+                </div>
+                <Field label="Reason / Description" error={inForm.formState.errors.damageReason?.message}>
+                  <textarea {...inForm.register("damageReason")} className="input resize-none" rows={3} placeholder="Describe the issue…" />
+                </Field>
+              </div>
+            )}
+            <Field label="Remarks">
+              <textarea {...inForm.register("remarks")} className="input resize-none" rows={2} placeholder="Optional notes…" />
+            </Field>
+            <div className="flex gap-3 pt-2">
+              <button type="button" onClick={() => { setShowInModal(false); setShowReturnPicker(true); }} className="flex-1 py-2.5 border border-gray-200 dark:border-slate-600 dark:text-slate-300 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700">Back</button>
+              <button type="submit" disabled={inForm.formState.isSubmitting} className="flex-1 py-2.5 bg-green-600 text-white text-sm font-medium rounded-xl disabled:opacity-60 flex items-center justify-center gap-2">
+                <ArrowDownLeft className="w-4 h-4" />
+                {inForm.formState.isSubmitting ? "Saving…" : "Confirm Return"}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

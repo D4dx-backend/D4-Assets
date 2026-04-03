@@ -1,14 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import toast from "react-hot-toast";
-import { ArrowLeftRight, ArrowDownLeft, AlertCircle, Download, FileSpreadsheet, FileText } from "lucide-react";
+import { ArrowLeftRight, Download, FileSpreadsheet, FileText } from "lucide-react";
 import { exportToCSV, exportToExcel, exportToPDF } from "@/lib/exportUtils";
 import PageHeader from "@/components/PageHeader";
-import Modal from "@/components/Modal";
 import EmptyState from "@/components/EmptyState";
 import Badge from "@/components/Badge";
 import Pagination from "@/components/Pagination";
@@ -33,28 +28,12 @@ interface Movement {
   remarks?: string;
 }
 
-const inSchema = z.object({
-  returnBy: z.string().min(1, "Return by is required"),
-  verifiedBy: z.string().min(1, "Verified by is required"),
-  condition: z.enum(["good", "damaged", "defective", "missing"]),
-  damageReason: z.string().optional(),
-  remarks: z.string().optional(),
-});
-
-type InForm = z.infer<typeof inSchema>;
-
 export default function MovementsPage() {
   const [movements, setMovements] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<"" | "OUT" | "IN">("")
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1, limit: 10 });
-  const [showInModal, setShowInModal] = useState(false);
-  const [selectedMovement, setSelectedMovement] = useState<Movement | null>(null);
-
-  const inForm = useForm<InForm>({ resolver: zodResolver(inSchema), defaultValues: { condition: "good" } });
-
-  const watchCondition = inForm.watch("condition");
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -72,25 +51,6 @@ export default function MovementsPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
   useEffect(() => { setPage(1); }, [filterStatus]);
-
-  async function onInSubmit(data: InForm) {
-    if (!selectedMovement) return;
-    const res = await fetch(`/api/movements/${selectedMovement._id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const result = await res.json() as { success: boolean; error?: string };
-    if (result.success) {
-      toast.success("Asset returned");
-      setShowInModal(false);
-      setSelectedMovement(null);
-      inForm.reset();
-      fetchAll();
-    } else {
-      toast.error(result.error ?? "Error");
-    }
-  }
 
   function movementRow(m: Movement) {
     return {
@@ -110,12 +70,6 @@ export default function MovementsPage() {
     };
   }
 
-  function openReturn(m: Movement) {
-    setSelectedMovement(m);
-    inForm.reset({ condition: "good" });
-    setShowInModal(true);
-  }
-
   return (
     <div>
       <PageHeader
@@ -123,9 +77,9 @@ export default function MovementsPage() {
         description="Global movement log — issue assets from the event page"
         action={
           <div className="flex gap-1">
-            <button onClick={() => exportToCSV(movements.map(m => ({ Asset: m.asset?.name ?? "", Event: m.event?.name ?? "", Person: m.allocatedPerson?.name ?? "", Status: m.status, "Out Date": m.outDate?.slice(0,10) ?? "", "In Date": m.inDate?.slice(0,10) ?? "", Condition: m.condition ?? "" })), "movements")} title="CSV" className="p-2 text-gray-500 dark:text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg border border-gray-200 dark:border-slate-600"><Download className="w-4 h-4" /></button>
-            <button onClick={() => exportToExcel(movements.map(m => ({ Asset: m.asset?.name ?? "", Event: m.event?.name ?? "", Person: m.allocatedPerson?.name ?? "", Status: m.status, "Out Date": m.outDate?.slice(0,10) ?? "", "In Date": m.inDate?.slice(0,10) ?? "", Condition: m.condition ?? "" })), "movements")} title="Excel" className="p-2 text-gray-500 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold">XLS</button>
-            <button onClick={() => exportToPDF(movements.map(m => ({ Asset: m.asset?.name ?? "", Event: m.event?.name ?? "", Person: m.allocatedPerson?.name ?? "", Status: m.status, "Out Date": m.outDate?.slice(0,10) ?? "", Condition: m.condition ?? "" })), "Movement Register", "movements")} title="PDF" className="p-2 text-gray-500 dark:text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold">PDF</button>
+            <button onClick={() => exportToCSV(movements.map(movementRow), "movements")} title="CSV" className="p-2 text-gray-500 dark:text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg border border-gray-200 dark:border-slate-600"><Download className="w-4 h-4" /></button>
+            <button onClick={() => exportToExcel(movements.map(movementRow), "movements")} title="Excel" className="p-2 text-gray-500 dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold">XLS</button>
+            <button onClick={() => exportToPDF(movements.map(movementRow), "Movement Register", "movements")} title="PDF" className="p-2 text-gray-500 dark:text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg border border-gray-200 dark:border-slate-600 text-xs font-bold">PDF</button>
           </div>
         }
       />
@@ -182,14 +136,6 @@ export default function MovementsPage() {
                   >
                     <FileText className="w-3.5 h-3.5" />
                   </button>
-                  {m.status === "OUT" && (
-                    <button
-                      onClick={() => openReturn(m)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 text-xs font-medium rounded-lg hover:bg-green-100 ml-1"
-                    >
-                      <ArrowDownLeft className="w-3.5 h-3.5" /> Return
-                    </button>
-                  )}
                 </div>
               </div>
             </div>
@@ -205,62 +151,6 @@ export default function MovementsPage() {
         onPageChange={setPage}
       />
 
-      {/* Check In Modal */}
-      {showInModal && selectedMovement && (
-        <Modal title="Return Asset" onClose={() => { setShowInModal(false); setSelectedMovement(null); }}>
-          <div className="mb-4 p-3 bg-gray-50 dark:bg-slate-700 rounded-xl text-sm">
-            <p className="font-medium dark:text-white">{selectedMovement.asset?.name}</p>
-            <p className="text-gray-500 dark:text-slate-400 text-xs">{selectedMovement.event?.name} · {selectedMovement.allocatedPerson?.name}</p>
-          </div>
-          <form onSubmit={inForm.handleSubmit(onInSubmit)} className="space-y-4">
-            <Field label="Return By" error={inForm.formState.errors.returnBy?.message}>
-              <input {...inForm.register("returnBy")} className="input" placeholder="Name of person returning" />
-            </Field>
-            <Field label="Verified By" error={inForm.formState.errors.verifiedBy?.message}>
-              <input {...inForm.register("verifiedBy")} className="input" placeholder="Name of verifier" />
-            </Field>
-            <Field label="Condition" error={inForm.formState.errors.condition?.message}>
-              <select {...inForm.register("condition")} className="select">
-                <option value="good">Good</option>
-                <option value="damaged">Damaged</option>
-                <option value="defective">Defective</option>
-                <option value="missing">Missing</option>
-              </select>
-            </Field>
-            {watchCondition !== "good" && (
-              <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
-                <div className="flex items-center gap-2 mb-2">
-                  <AlertCircle className="w-4 h-4 text-red-500" />
-                  <p className="text-xs font-medium text-red-700">This will create a damage/defect report</p>
-                </div>
-                <Field label="Reason / Description" error={inForm.formState.errors.damageReason?.message}>
-                  <textarea {...inForm.register("damageReason")} className="input resize-none" rows={3} placeholder="Describe the issue…" />
-                </Field>
-              </div>
-            )}
-            <Field label="Remarks">
-              <textarea {...inForm.register("remarks")} className="input resize-none" rows={2} placeholder="Optional notes…" />
-            </Field>
-            <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => { setShowInModal(false); setSelectedMovement(null); }} className="flex-1 py-2.5 border border-gray-200 dark:border-slate-600 dark:text-slate-300 text-sm font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700">Cancel</button>
-              <button type="submit" disabled={inForm.formState.isSubmitting} className="flex-1 py-2.5 bg-green-600 text-white text-sm font-medium rounded-xl disabled:opacity-60 flex items-center justify-center gap-2">
-                <ArrowDownLeft className="w-4 h-4" />
-                {inForm.formState.isSubmitting ? "Saving…" : "Confirm Return"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">{label}</label>
-      {children}
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );
 }
