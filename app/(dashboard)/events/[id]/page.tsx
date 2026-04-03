@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -35,6 +35,8 @@ interface Asset {
   _id: string;
   name: string;
   category: string;
+  productCode?: string;
+  allowOutside: boolean;
 }
 
 interface Movement {
@@ -106,7 +108,7 @@ export default function EventDetailPage() {
     setLoading(true);
     const [evRes, aRes, mRes] = await Promise.all([
       fetch(`/api/events/${id}`),
-      fetch("/api/assets"),
+      fetch("/api/assets?limit=500"),
       fetch(`/api/movements?event=${id}`),
     ]);
     const [evData, aData, mData] = await Promise.all([
@@ -139,22 +141,22 @@ export default function EventDetailPage() {
 
   // ── Row helper ────────────────────────────────────────────────────────────
 
-  function setRow(assetId: string, patch: Partial<AssetRow>) {
+  const setRow = useCallback((assetId: string, patch: Partial<AssetRow>) => {
     setRows((prev) =>
       prev.map((r) => (r.asset._id === assetId ? { ...r, ...patch } : r))
     );
-  }
+  }, []);
 
   // ── Batch OUT ─────────────────────────────────────────────────────────────
 
-  function togglePendingOut(assetId: string) {
+  const togglePendingOut = useCallback((assetId: string) => {
     setPendingOutIds((prev) => {
       const next = new Set(prev);
       if (next.has(assetId)) next.delete(assetId);
       else next.add(assetId);
       return next;
     });
-  }
+  }, []);
 
   async function submitPendingOut() {
     if (pendingOutIds.size === 0) return;
@@ -182,7 +184,7 @@ export default function EventDetailPage() {
 
   // ── Return (IN) ───────────────────────────────────────────────────────────
 
-  async function returnAsset(row: AssetRow) {
+  const returnAsset = useCallback(async (row: AssetRow) => {
     if (!row.movement) return;
     setRow(row.asset._id, { saving: true });
     const res = await fetch(`/api/movements/${row.movement._id}`, {
@@ -201,7 +203,7 @@ export default function EventDetailPage() {
       toast.error(data.error ?? "Return failed");
       setRow(row.asset._id, { saving: false });
     }
-  }
+  }, [setRow, fetchAll]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
@@ -355,24 +357,13 @@ export default function EventDetailPage() {
               {/* Rows */}
               <div className="divide-y divide-gray-50 dark:divide-slate-700/50">
                 {catRows.map((row) => (
-                  <AssetTableRow
+                  <MemoAssetTableRow
                     key={row.asset._id}
                     row={row}
                     isPendingOut={pendingOutIds.has(row.asset._id)}
-                    onTogglePendingOut={() => togglePendingOut(row.asset._id)}
-                    onToggleInline={() =>
-                      setRow(row.asset._id, { inlineOpen: !row.inlineOpen, noteOpen: false, returnCondition: "good", returnRemarks: "" })
-                    }
-                    onToggleNote={() =>
-                      setRow(row.asset._id, { noteOpen: !row.noteOpen })
-                    }
-                    onConditionChange={(c) =>
-                      setRow(row.asset._id, { returnCondition: c })
-                    }
-                    onRemarksChange={(r) =>
-                      setRow(row.asset._id, { returnRemarks: r })
-                    }
-                    onReturn={() => returnAsset(row)}
+                    setRow={setRow}
+                    togglePendingOut={togglePendingOut}
+                    returnAsset={returnAsset}
                   />
                 ))}
               </div>
@@ -389,23 +380,17 @@ export default function EventDetailPage() {
 interface AssetTableRowProps {
   row: AssetRow;
   isPendingOut: boolean;
-  onTogglePendingOut: () => void;
-  onToggleInline: () => void;
-  onToggleNote: () => void;
-  onConditionChange: (c: ReturnCondition) => void;
-  onRemarksChange: (r: string) => void;
-  onReturn: () => void;
+  setRow: (assetId: string, patch: Partial<AssetRow>) => void;
+  togglePendingOut: (assetId: string) => void;
+  returnAsset: (row: AssetRow) => void;
 }
 
 function AssetTableRow({
   row,
   isPendingOut,
-  onTogglePendingOut,
-  onToggleInline,
-  onToggleNote,
-  onConditionChange,
-  onRemarksChange,
-  onReturn,
+  setRow,
+  togglePendingOut,
+  returnAsset,
 }: AssetTableRowProps) {
   const { asset, movement, inlineOpen, noteOpen, returnCondition, returnRemarks, saving } = row;
 
@@ -414,6 +399,13 @@ function AssetTableRow({
   const isIn = movement?.status === "IN";
   const cond = movement?.condition as ReturnCondition | undefined;
 
+  const handleTogglePendingOut = useCallback(() => togglePendingOut(asset._id), [togglePendingOut, asset._id]);
+  const handleToggleInline = useCallback(() => setRow(asset._id, { inlineOpen: !inlineOpen, noteOpen: false, returnCondition: "good", returnRemarks: "" }), [setRow, asset._id, inlineOpen]);
+  const handleToggleNote = useCallback(() => setRow(asset._id, { noteOpen: !noteOpen }), [setRow, asset._id, noteOpen]);
+  const handleConditionChange = useCallback((c: ReturnCondition) => setRow(asset._id, { returnCondition: c }), [setRow, asset._id]);
+  const handleRemarksChange = useCallback((r: string) => setRow(asset._id, { returnRemarks: r }), [setRow, asset._id]);
+  const handleReturn = useCallback(() => returnAsset(row), [returnAsset, row]);
+
   return (
     <div>
       {/* Main row */}
@@ -421,26 +413,38 @@ function AssetTableRow({
         {/* Item name */}
         <div className="px-4 py-3 min-w-0">
           <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{asset.name}</p>
+          {asset.productCode && (
+            <p className="text-xs text-gray-400 dark:text-slate-500 font-mono">#{asset.productCode}</p>
+          )}
+          {!asset.allowOutside && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">Not allowed outside</p>
+          )}
         </div>
 
         {/* OUT column */}
         <div className="px-3 py-3 w-14 flex justify-center">
           {isAvailable ? (
-            <button
-              onClick={onTogglePendingOut}
-              title={isPendingOut ? "Remove from issue list" : "Add to issue list"}
-              className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors ${
-                isPendingOut
-                  ? "border-orange-400 bg-orange-50 dark:bg-orange-900/20"
-                  : "border-gray-300 dark:border-slate-500 hover:border-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/10"
-              }`}
-            >
-              {isPendingOut ? (
-                <CheckCircle2 className="w-4 h-4 text-orange-500" />
-              ) : (
-                <Circle className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
-              )}
-            </button>
+            asset.allowOutside ? (
+              <button
+                onClick={handleTogglePendingOut}
+                title={isPendingOut ? "Remove from issue list" : "Add to issue list"}
+                className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors ${
+                  isPendingOut
+                    ? "border-orange-400 bg-orange-50 dark:bg-orange-900/20"
+                    : "border-gray-300 dark:border-slate-500 hover:border-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/10"
+                }`}
+              >
+                {isPendingOut ? (
+                  <CheckCircle2 className="w-4 h-4 text-orange-500" />
+                ) : (
+                  <Circle className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
+                )}
+              </button>
+            ) : (
+              <span title="Not allowed outside" className="w-7 h-7 rounded-full border-2 border-gray-200 dark:border-slate-600 flex items-center justify-center opacity-40 cursor-not-allowed">
+                <Circle className="w-3.5 h-3.5 text-gray-300 dark:text-slate-600" />
+              </span>
+            )
           ) : (
             <CheckCircle2 className="w-6 h-6 text-orange-500" />
           )}
@@ -452,7 +456,7 @@ function AssetTableRow({
             <CheckCircle2 className="w-6 h-6 text-green-500" />
           ) : isOut ? (
             <button
-              onClick={onToggleInline}
+              onClick={handleToggleInline}
               title="Mark as returned"
               className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors ${
                 inlineOpen
@@ -504,14 +508,14 @@ function AssetTableRow({
             </p>
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
-                onClick={onToggleNote}
+                onClick={handleToggleNote}
                 className="text-xs text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 flex items-center gap-1 transition-colors"
               >
                 {noteOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                 {noteOpen ? "Hide note" : "Add note"}
               </button>
               <button
-                onClick={onReturn}
+                onClick={handleReturn}
                 disabled={saving}
                 className="flex items-center gap-1.5 bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-green-800 disabled:opacity-60 transition-colors"
               >
@@ -529,7 +533,7 @@ function AssetTableRow({
                   <label className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Condition</label>
                   <select
                     value={returnCondition}
-                    onChange={(e) => onConditionChange(e.target.value as ReturnCondition)}
+                    onChange={(e) => handleConditionChange(e.target.value as ReturnCondition)}
                     className="select text-sm"
                   >
                     <option value="good">Good — No issues</option>
@@ -542,7 +546,7 @@ function AssetTableRow({
                   <label className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Remarks (optional)</label>
                   <input
                     value={returnRemarks}
-                    onChange={(e) => onRemarksChange(e.target.value)}
+                    onChange={(e) => handleRemarksChange(e.target.value)}
                     placeholder="Notes…"
                     className="input text-sm"
                   />
@@ -561,3 +565,5 @@ function AssetTableRow({
     </div>
   );
 }
+
+const MemoAssetTableRow = memo(AssetTableRow);

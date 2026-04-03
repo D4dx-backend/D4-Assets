@@ -32,7 +32,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   const asset = await Asset.findById(id);
   if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
 
-  const allowed = ["name", "category", "dateOfPurchase", "noWarranty", "warrantyDetails", "warrantyExpiryDate", "billUrl", "billPublicId"];
+  const allowed = ["name", "productCode", "category", "dateOfPurchase", "noWarranty", "warrantyDetails", "warrantyExpiryDate", "billUrl", "billPublicId", "allowOutside"];
   const noWarranty = body["noWarranty"] === true;
   for (const key of allowed) {
     if (key in body) {

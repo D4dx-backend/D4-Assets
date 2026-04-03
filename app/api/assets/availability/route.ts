@@ -17,7 +17,7 @@ export async function GET(req: Request) {
   await connectDB();
 
   const assets = await Asset.find({ isActive: true, $text: { $search: search } })
-    .select("name category dateOfPurchase warrantyDetails warrantyExpiryDate")
+    .select("name category dateOfPurchase warrantyDetails warrantyExpiryDate allowOutside")
     .sort({ score: { $meta: "textScore" } })
     .limit(20)
     .lean();

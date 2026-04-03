@@ -9,10 +9,12 @@ export type UserRole = "admin" | "user";
 
 export interface AssetFormData {
   name: string;
+  productCode?: string;
   category: string;
   dateOfPurchase: string;
   warrantyDetails: string;
   warrantyExpiryDate?: string;
+  allowOutside?: boolean;
 }
 
 export interface EventFormData {

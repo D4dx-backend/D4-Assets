@@ -61,6 +61,7 @@ export default function MovementsPage() {
     const params = new URLSearchParams({ page: String(page), limit: "10" });
     if (filterStatus) params.set("status", filterStatus);
     const mRes = await fetch(`/api/movements?${params.toString()}`);
+    if (!mRes.ok) { setLoading(false); return; }
     const mData = await mRes.json() as { success: boolean; data: Movement[]; pagination: { total: number; totalPages: number; limit: number } };
     if (mData.success) {
       setMovements(mData.data);

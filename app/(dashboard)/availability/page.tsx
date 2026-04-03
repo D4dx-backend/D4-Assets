@@ -88,6 +88,7 @@ export default function AvailabilityPage() {
         suggestions={assetSuggestions}
         placeholder="Type asset name to check availability…"
         loading={loading}
+        showClear
         className="mb-6"
         inputClassName="py-3 pl-10 shadow-sm bg-white dark:bg-slate-800"
         autoFocus

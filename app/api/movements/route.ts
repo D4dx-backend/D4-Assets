@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { connectDB } from "@/lib/mongodb";
 import Movement from "@/lib/models/Movement";
+import Asset from "@/lib/models/Asset";
 import DamageReport from "@/lib/models/DamageReport";
+import "@/lib/models/Event";
+import "@/lib/models/Person";
+import "@/lib/models/User";
 import { logActivity } from "@/lib/activityLogger";
 import mongoose from "mongoose";
 
@@ -23,30 +27,35 @@ export async function GET(req: Request) {
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
   const skip = (page - 1) * limit;
 
-  await connectDB();
-  const query: Record<string, unknown> = {};
-  if (eventId) query.event = eventId;
-  if (assetId) query.asset = assetId;
-  if (status) query.status = status;
+  try {
+    await connectDB();
+    const query: Record<string, unknown> = {};
+    if (eventId) query.event = eventId;
+    if (assetId) query.asset = assetId;
+    if (status) query.status = status;
 
-  const [movements, total] = await Promise.all([
-    Movement.find(query)
-      .populate("asset", "name category")
-      .populate("event", "name location fromDate toDate")
-      .populate("allocatedPerson", "name")
-      .populate("outBy", "name")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-    Movement.countDocuments(query),
-  ]);
+    const [movements, total] = await Promise.all([
+      Movement.find(query)
+        .populate("asset", "name category")
+        .populate("event", "name location fromDate toDate")
+        .populate("allocatedPerson", "name")
+        .populate("outBy", "name")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Movement.countDocuments(query),
+    ]);
 
-  return NextResponse.json({
-    success: true,
-    data: movements,
-    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-  });
+    return NextResponse.json({
+      success: true,
+      data: movements,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
+  } catch (err) {
+    console.error("GET /api/movements error:", err);
+    return NextResponse.json({ error: "Failed to fetch movements" }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {
@@ -67,6 +76,18 @@ export async function POST(req: Request) {
   }
 
   await connectDB();
+
+  // Enforce allowOutside gate
+  const assetDoc = await Asset.findById(asset).select("allowOutside").lean();
+  if (!assetDoc) {
+    return NextResponse.json({ error: "Asset not found" }, { status: 404 });
+  }
+  if (!assetDoc.allowOutside) {
+    return NextResponse.json(
+      { error: "This asset is not allowed to be taken outside" },
+      { status: 403 }
+    );
+  }
 
   // Check if asset is already OUT for this event
   const existing = await Movement.findOne({ asset, event, status: "OUT" });

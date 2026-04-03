@@ -2,6 +2,7 @@ import mongoose, { Schema, Document, Model, models } from "mongoose";
 
 export interface IAsset extends Document {
   name: string;
+  productCode?: string;
   category: string;
   dateOfPurchase: Date;
   noWarranty: boolean;
@@ -9,6 +10,7 @@ export interface IAsset extends Document {
   warrantyExpiryDate?: Date;
   billUrl?: string;
   billPublicId?: string;
+  allowOutside: boolean;
   createdBy: mongoose.Types.ObjectId;
   isActive: boolean;
   createdAt: Date;
@@ -18,6 +20,7 @@ export interface IAsset extends Document {
 const AssetSchema = new Schema<IAsset>(
   {
     name: { type: String, required: true, trim: true },
+    productCode: { type: String, trim: true },
     category: { type: String, required: true, trim: true },
     dateOfPurchase: { type: Date, required: true },
     noWarranty: { type: Boolean, default: false },
@@ -25,6 +28,7 @@ const AssetSchema = new Schema<IAsset>(
     warrantyExpiryDate: { type: Date },
     billUrl: { type: String },
     billPublicId: { type: String },
+    allowOutside: { type: Boolean, default: false },
     createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
     isActive: { type: Boolean, default: true },
   },

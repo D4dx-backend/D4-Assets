@@ -20,12 +20,14 @@ import { useSession } from "next-auth/react";
 interface Asset {
   _id: string;
   name: string;
+  productCode?: string;
   category: string;
   dateOfPurchase: string;
   noWarranty: boolean;
   warrantyDetails: string;
   warrantyExpiryDate?: string;
   billUrl?: string;
+  allowOutside: boolean;
 }
 
 interface Category {
@@ -35,11 +37,13 @@ interface Category {
 
 const assetSchema = z.object({
   name: z.string().min(1, "Asset name is required"),
+  productCode: z.string().optional(),
   category: z.string().min(1, "Category is required"),
   dateOfPurchase: z.string().min(1, "Date of purchase is required"),
   noWarranty: z.boolean().optional(),
   warrantyDetails: z.string().optional(),
   warrantyExpiryDate: z.string().optional(),
+  allowOutside: z.boolean().optional(),
 });
 
 type AssetForm = z.infer<typeof assetSchema>;
@@ -49,7 +53,6 @@ export default function AssetsPage() {
   const isAdmin = session?.user?.role === "admin";
 
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [allAssetNames, setAllAssetNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -74,8 +77,11 @@ export default function AssetsPage() {
 
   const fetchAssets = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams({ page: String(page), limit: "10" });
-    if (search) params.set("search", search);
+    const params = new URLSearchParams(
+      search
+        ? { page: "1", limit: "200", search }
+        : { page: String(page), limit: "10" }
+    );
     const res = await fetch(`/api/assets?${params.toString()}`);
     const data = await res.json() as { success: boolean; data: Asset[]; pagination: { total: number; totalPages: number; limit: number } };
     if (data.success) {
@@ -89,16 +95,15 @@ export default function AssetsPage() {
     setPage(1);
   }, [search]);
 
+  // Debounce only applies when searching (typing); pagination fires immediately.
   useEffect(() => {
-    const timer = setTimeout(() => { fetchAssets(); }, 600);
+    if (!search) {
+      fetchAssets();
+      return;
+    }
+    const timer = setTimeout(() => { fetchAssets(); }, 500);
     return () => clearTimeout(timer);
-  }, [fetchAssets]);
-
-  const fetchAllAssetNames = useCallback(async () => {
-    const res = await fetch("/api/assets?limit=500");
-    const data = await res.json() as { success: boolean; data: Asset[] };
-    if (data.success) setAllAssetNames(data.data.map((a) => a.name));
-  }, []);
+  }, [fetchAssets, search]);
 
   const fetchCategories = useCallback(async () => {
     const res = await fetch("/api/categories");
@@ -107,9 +112,8 @@ export default function AssetsPage() {
   }, []);
 
   useEffect(() => {
-    fetchAllAssetNames();
     fetchCategories();
-  }, [fetchAllAssetNames, fetchCategories]);
+  }, [fetchCategories]);
 
   function openCreate() {
     setEditingAsset(null);
@@ -123,11 +127,13 @@ export default function AssetsPage() {
     setEditingAsset(asset);
     reset({
       name: asset.name,
+      productCode: asset.productCode ?? "",
       category: asset.category,
       dateOfPurchase: asset.dateOfPurchase?.slice(0, 10),
       noWarranty: asset.noWarranty ?? false,
       warrantyDetails: asset.warrantyDetails,
       warrantyExpiryDate: asset.warrantyExpiryDate?.slice(0, 10) ?? "",
+      allowOutside: asset.allowOutside ?? false,
     });
     setShowModal(true);
   }
@@ -163,7 +169,6 @@ export default function AssetsPage() {
       toast.success(editingAsset ? "Asset updated" : "Asset created");
       setShowModal(false);
       fetchAssets();
-      fetchAllAssetNames();
     } else {
       toast.error(result.error ?? "Something went wrong");
     }
@@ -183,7 +188,6 @@ export default function AssetsPage() {
     if (data.success) {
       toast.success("Asset deleted");
       fetchAssets();
-      fetchAllAssetNames();
     } else {
       toast.error(data.error ?? "Failed to delete");
     }
@@ -215,7 +219,7 @@ export default function AssetsPage() {
       <SearchInput
         value={search}
         onChange={(v) => setSearch(v)}
-        suggestions={allAssetNames}
+        suggestions={assets.map((a) => a.name)}
         placeholder="Search assets…"
         className="mb-4"
       />
@@ -258,10 +262,16 @@ export default function AssetsPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-medium text-gray-900 dark:text-white text-sm">{asset.name}</h3>
                       <Badge variant="blue">{asset.category}</Badge>
+                      {asset.allowOutside
+                        ? <Badge variant="green">Outside OK</Badge>
+                        : <Badge variant="gray">Inside Only</Badge>}
                       {asset.noWarranty && <Badge variant="gray">No Warranty</Badge>}
                       {warrantyExpired && <Badge variant="red">Warranty Expired</Badge>}
                       {warrantyExpiringSoon && <Badge variant="yellow">Expiring Soon</Badge>}
                     </div>
+                    {asset.productCode && (
+                      <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5 font-mono">#{asset.productCode}</p>
+                    )}
                     <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
                       Purchased: {format(new Date(asset.dateOfPurchase), "dd MMM yyyy")}
                     </p>
@@ -302,13 +312,15 @@ export default function AssetsPage() {
         </div>
       )}
 
-      <Pagination
-        page={page}
-        totalPages={pagination.totalPages}
-        total={pagination.total}
-        limit={pagination.limit}
-        onPageChange={setPage}
-      />
+      {!search && (
+        <Pagination
+          page={page}
+          totalPages={pagination.totalPages}
+          total={pagination.total}
+          limit={pagination.limit}
+          onPageChange={setPage}
+        />
+      )}
 
       {/* Asset Modal */}
       {showModal && (
@@ -319,6 +331,10 @@ export default function AssetsPage() {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <Field label="Asset Name" error={errors.name?.message}>
               <input {...register("name")} className="input" placeholder="e.g. Projector" />
+            </Field>
+
+            <Field label="Product Code" error={errors.productCode?.message}>
+              <input {...register("productCode")} className="input" placeholder="e.g. SN-2024-001" />
             </Field>
 
             <Field label="Category" error={errors.category?.message}>
@@ -375,6 +391,20 @@ export default function AssetsPage() {
                 className="text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-blue-50 file:text-blue-700"
               />
             </Field>
+
+            {/* Allow Outside toggle */}
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  {...register("allowOutside")}
+                  className="sr-only peer"
+                />
+                <div className="w-10 h-5 bg-gray-200 dark:bg-slate-600 rounded-full peer-checked:bg-green-600 transition-colors" />
+                <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5" />
+              </div>
+              <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Allow Outside</span>
+            </label>
 
             <div className="flex gap-3 pt-2">
               <button

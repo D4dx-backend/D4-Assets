@@ -14,7 +14,7 @@ export async function GET(req: Request) {
   const search = (searchParams.get("search") ?? "").trim().slice(0, 100);
   const category = (searchParams.get("category") ?? "").trim().slice(0, 100);
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
-  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
+  const limit = Math.min(500, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10)));
   const skip = (page - 1) * limit;
 
   await connectDB();
@@ -25,7 +25,7 @@ export async function GET(req: Request) {
 
   const [assets, total] = await Promise.all([
     Asset.find(query)
-      .select("name category dateOfPurchase noWarranty warrantyDetails warrantyExpiryDate billUrl createdAt")
+      .select("name productCode category dateOfPurchase noWarranty warrantyDetails warrantyExpiryDate billUrl allowOutside createdAt")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -47,6 +47,7 @@ export async function POST(req: Request) {
 
   const body = await req.json() as {
     name: string;
+    productCode?: string;
     category: string;
     dateOfPurchase: string;
     noWarranty?: boolean;
@@ -54,9 +55,10 @@ export async function POST(req: Request) {
     warrantyExpiryDate?: string;
     billUrl?: string;
     billPublicId?: string;
+    allowOutside?: boolean;
   };
 
-  const { name, category, dateOfPurchase, noWarranty, warrantyDetails, warrantyExpiryDate, billUrl, billPublicId } = body;
+  const { name, productCode, category, dateOfPurchase, noWarranty, warrantyDetails, warrantyExpiryDate, billUrl, billPublicId, allowOutside } = body;
 
   if (!name || !category || !dateOfPurchase) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -73,6 +75,7 @@ export async function POST(req: Request) {
 
     const asset = await Asset.create({
       name,
+      productCode: productCode?.trim() || undefined,
       category,
       dateOfPurchase: new Date(dateOfPurchase),
       noWarranty: noWarranty ?? false,
@@ -80,6 +83,7 @@ export async function POST(req: Request) {
       warrantyExpiryDate: noWarranty ? undefined : (warrantyExpiryDate ? new Date(warrantyExpiryDate) : undefined),
       billUrl,
       billPublicId,
+      allowOutside: allowOutside ?? false,
       createdBy,
     });
 

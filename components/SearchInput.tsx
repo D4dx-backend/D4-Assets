@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import { Search, X, ArrowUpRight } from "lucide-react";
 
 interface SearchInputProps {
@@ -55,18 +55,21 @@ export default function SearchInput({
   const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const filtered =
-    value.trim().length > 0
-      ? [
-          ...new Set(
-            suggestions.filter(
-              (s) =>
-                s.toLowerCase().includes(value.toLowerCase()) &&
-                s.toLowerCase() !== value.toLowerCase()
-            )
-          ),
-        ].slice(0, 7)
-      : [];
+  const filtered = useMemo(
+    () =>
+      value.trim().length > 0
+        ? [
+            ...new Set(
+              suggestions.filter(
+                (s) =>
+                  s.toLowerCase().includes(value.toLowerCase()) &&
+                  s.toLowerCase() !== value.toLowerCase()
+              )
+            ),
+          ].slice(0, 7)
+        : [],
+    [value, suggestions]
+  );
 
   useEffect(() => {
     setActiveIndex(-1);
