@@ -1,10 +1,6 @@
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
-
 type Row = Record<string, string | number | boolean | null | undefined>;
 
-// ── CSV ──────────────────────────────────────────────────────────────────────
+// ── CSV (no heavy deps) ─────────────────────────────────────────────────────
 export function exportToCSV(rows: Row[], filename: string) {
   if (!rows.length) return;
   const headers = Object.keys(rows[0]);
@@ -23,18 +19,22 @@ export function exportToCSV(rows: Row[], filename: string) {
   downloadBlob(blob, `${filename}.csv`);
 }
 
-// ── Excel ─────────────────────────────────────────────────────────────────────
-export function exportToExcel(rows: Row[], filename: string) {
+// ── Excel (lazy-load xlsx ~400KB) ────────────────────────────────────────────
+export async function exportToExcel(rows: Row[], filename: string) {
   if (!rows.length) return;
+  const XLSX = await import("xlsx");
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Data");
   XLSX.writeFile(wb, `${filename}.xlsx`);
 }
 
-// ── PDF ──────────────────────────────────────────────────────────────────────
-export function exportToPDF(rows: Row[], title: string, filename: string) {
+// ── PDF (lazy-load jspdf + autotable ~500KB) ─────────────────────────────────
+export async function exportToPDF(rows: Row[], title: string, filename: string) {
   if (!rows.length) return;
+  const { default: jsPDF } = await import("jspdf");
+  const { default: autoTable } = await import("jspdf-autotable");
+
   const doc = new jsPDF({ orientation: "landscape" });
 
   doc.setFontSize(14);

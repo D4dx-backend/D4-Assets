@@ -14,6 +14,9 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "*.cdn.digitaloceanspaces.com" },
     ],
   },
+  experimental: {
+    optimizePackageImports: ["lucide-react", "date-fns"],
+  },
 };
 
 export default withPWA(nextConfig);
