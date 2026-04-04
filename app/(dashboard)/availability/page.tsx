@@ -198,10 +198,12 @@ export default function AvailabilityPage() {
 
               {/* Asset details row */}
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-slate-400 mb-3">
-                <div className="flex items-center gap-1">
-                  <CalendarDays className="w-3 h-3" />
-                  <span>Purchased: {format(new Date(r.dateOfPurchase), "dd MMM yyyy")}</span>
-                </div>
+                {r.dateOfPurchase && (
+                  <div className="flex items-center gap-1">
+                    <CalendarDays className="w-3 h-3" />
+                    <span>Purchased: {format(new Date(r.dateOfPurchase), "dd MMM yyyy")}</span>
+                  </div>
+                )}
                 {r.warrantyDetails && (
                   <div className="flex items-center gap-1">
                     <ShieldCheck className="w-3 h-3" />
